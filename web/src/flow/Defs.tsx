@@ -15,7 +15,7 @@ export const ARROW_TONES = [
 ] as const
 export type ArrowTone = (typeof ARROW_TONES)[number]
 
-export const arrow = (tone: ArrowTone) => `url(#ckg-arrow-${tone})`
+export const arrow = (tone: ArrowTone) => `url(#cw-arrow-${tone})`
 
 export function Defs() {
   return (
@@ -24,7 +24,7 @@ export function Defs() {
         {ARROW_TONES.map((tone) => (
           <marker
             key={tone}
-            id={`ckg-arrow-${tone}`}
+            id={`cw-arrow-${tone}`}
             viewBox="0 0 10 10"
             refX="9"
             refY="5"

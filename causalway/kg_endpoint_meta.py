@@ -1,6 +1,6 @@
 """Derive LLM ``var_meta`` / ``pair_meta`` from an *external* KG endpoint.
 
-``causalkg.llm_meta`` builds ``var_meta`` / ``pair_meta`` from the causal KG's
+``causalway.llm_meta`` builds ``var_meta`` / ``pair_meta`` from the causal KG's
 own T-Box (``rdfs:label`` / ``rdfs:comment``). This module builds the same two
 shapes from a *different*, general-purpose knowledge base (Wikidata by
 default) that the discovery columns have been manually mapped onto, e.g.::
@@ -17,7 +17,7 @@ asks an LLM to summarize it into one or two sentences. For each mapped pair,
 :func:`build_pair_meta_from_kg` looks for a relational path within 1 hop
 (a direct edge between the two entities, or a shared 1-hop neighbor) and asks
 an LLM to summarize *that*; a pair with no such path gets ``""``, per
-``causalkg.llm_meta.build_pair_meta``'s ``{(a, b): text}`` shape.
+``causalway.llm_meta.build_pair_meta``'s ``{(a, b): text}`` shape.
 
 Either dict can be overridden per-column / per-pair with hand-written natural
 -language text via ``text_meta`` (requirement (1)); the KG lookup covers
@@ -49,7 +49,7 @@ _QUERY_RETRIES = 2
 
 # Wikidata requires a descriptive User-Agent on query.wikidata.org (unlabelled
 # requests get a bare 403); see https://meta.wikimedia.org/wiki/User-Agent_policy.
-_USER_AGENT = "CausalKG-api/0.1 (https://github.com/; causal-discovery research tool)"
+_USER_AGENT = "CausalWay-api/0.1 (https://github.com/; causal-discovery research tool)"
 
 _QID_RE = re.compile(r"^Q\d+$")
 

@@ -10,8 +10,8 @@ import os
 import numpy as np
 import pytest
 
-from causalkg.result import OntologicalCausalGraph
-from causalkg.sources import resolve_graph
+from causalway.result import OntologicalCausalGraph
+from causalway.sources import resolve_graph
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RESULT_FILES = [
@@ -47,13 +47,13 @@ def test_from_rdf_recovers_uniquified_names():
     # suffix nodes.py._with_name uses, and check the label survives to_rdf/from_rdf.
     from rdflib import Namespace, RDF, RDFS
 
-    from causalkg.constraints import EdgeConstraint
-    from causalkg.nodes import PropertyNode
+    from causalway.constraints import EdgeConstraint
+    from causalway.nodes import PropertyNode
 
     EX = Namespace("http://example.org/")
     n1 = PropertyNode(domain=EX.Patient, prop=EX.stage, range_=EX.string, kind="data")
     n2 = PropertyNode(domain=EX.Patient, prop=EX.stage, range_=EX.integer, kind="data")
-    from causalkg.nodes import _with_name
+    from causalway.nodes import _with_name
     n2 = _with_name(n2, "Patient.stage_2")
 
     adj = np.array([[0, 1], [0, 0]])
@@ -79,8 +79,8 @@ def test_ambiguous_graph_requires_graph_id_or_method():
 
 
 def test_to_dag_strict_raises_on_cycle():
-    from causalkg.constraints import EdgeConstraint
-    from causalkg.nodes import PropertyNode
+    from causalway.constraints import EdgeConstraint
+    from causalway.nodes import PropertyNode
     from rdflib import Namespace
 
     EX = Namespace("http://example.org/")
@@ -95,8 +95,8 @@ def test_to_dag_strict_raises_on_cycle():
 
 
 def test_to_dag_weight_breaks_lowest_weight_edge():
-    from causalkg.constraints import EdgeConstraint
-    from causalkg.nodes import PropertyNode
+    from causalway.constraints import EdgeConstraint
+    from causalway.nodes import PropertyNode
     from rdflib import Namespace
 
     EX = Namespace("http://example.org/")

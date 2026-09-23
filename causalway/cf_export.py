@@ -2,7 +2,7 @@
 
 A world is one unit, one joint intervention over one or more causal variables,
 and — for every non-intervened node of the model — the value that node would
-most likely have taken.  :mod:`causalkg.queries` already serialises a single
+most likely have taken.  :mod:`causalway.queries` already serialises a single
 targeted query and its single answer; this module is the whole-board form,
 which is what the counterfactual module of the web service computes and the
 only artifact of this project that can describe *named resources of the source
@@ -15,48 +15,48 @@ What a world says, and nothing more
 The question a counterfactual is actually asked is: *for this unit, if I change
 these properties, what would the others most likely be?*  Everything in the
 export answers exactly that.  An earlier version also wrote the full outcome
-distribution as a ``ckg:CategoricalDistribution`` resource with one
-``ckg:Outcome`` child per level — for a mostly-categorical KG that is ``1 + k``
+distribution as a ``cw:CategoricalDistribution`` resource with one
+``cw:Outcome`` child per level — for a mostly-categorical KG that is ``1 + k``
 extra subjects *per node per world*, and it dominated the document while
 answering a question nobody asked.  It is gone (see ``_RETIRED_*`` in
-:mod:`causalkg.vocab`).  What replaced it is one triple: ``ckg:probability``,
-the mass of the arg-max level that ``ckg:predictedValue`` actually reports.
+:mod:`causalway.vocab`).  What replaced it is one triple: ``cw:probability``,
+the mass of the arg-max level that ``cw:predictedValue`` actually reports.
 
 Three things stayed that a naive diet would have cut:
 
-* **``ckg:factualValue``.**  "dosage would have been 40" means nothing until
+* **``cw:factualValue``.**  "dosage would have been 40" means nothing until
   "dosage was 25" is beside it.  One triple per node, and the single most
   load-bearing one in the document.  The contrast between them is deliberately
   not minted as a term: it is a subtraction.
 * **Every non-intervened node**, not just nominated outcomes — a world is
   interesting precisely because it says what *else* would have been different.
-* **``ckg:rowCount``.**  See below; without it ``ckg:standardDeviation`` is
+* **``cw:rowCount``.**  See below; without it ``cw:standardDeviation`` is
   uninterpretable.
 
 Uncertainty, honestly
 ---------------------
 A categorical node's counterfactual is a genuine draw: observing class ``k``
 constrains the Gumbel vector but does not determine it, so
-:mod:`causalkg.mechanisms` samples the noise *posterior* and the resulting
-spread is real.  Those nodes get ``ckg:probability``.
+:mod:`causalway.mechanisms` samples the noise *posterior* and the resulting
+spread is real.  Those nodes get ``cw:probability``.
 
 A continuous node is the opposite case, and this is the subtlety worth
 spelling out.  Its mechanism ``X = f(PA) + N`` is invertible, so abduction from
 a fully observed row *solves* for ``N`` exactly — one number, not a posterior.
 Its counterfactual therefore varies only when something upstream varies, i.e.
 when it has a stochastic (categorical) ancestor whose own counterfactual moves
-between draws.  So ``ckg:standardDeviation`` is genuine uncertainty for such a
+between draws.  So ``cw:standardDeviation`` is genuine uncertainty for such a
 node and identically zero for one without such an ancestor — and a reader
 cannot tell which from the number alone.  Worse, when the flat join gave the
 unit several rows, the spread *across those rows* is mixed inseparably into the
-same figure.  ``ckg:rowCount`` is exported beside it so the ambiguity is at
+same figure.  ``cw:rowCount`` is exported beside it so the ambiguity is at
 least visible: ``1`` means the spread is purely counterfactual, ``> 1`` means
 row duplication is folded in.  Separating those two axes properly is not
 implemented.
 
 Datatypes and IRIs
 ------------------
-Values are typed through :func:`causalkg.vocab.value_datatype`, whose source of
+Values are typed through :func:`causalway.vocab.value_datatype`, whose source of
 truth is the *fitted* dtype rather than the ontology's ``R_p`` — a property
 declared ``xsd:double`` but discretised into bins holds ``"(10, 20]"``, and
 typing that as a double produces a literal no validator accepts.  A node whose
@@ -69,16 +69,16 @@ supported, which is what makes per-row literal typing possible at all.
 Units without a name
 --------------------
 A world is normally about a named entity of the source KG, and then it also
-writes ``entity ckg:hasQuery world`` for entity-first navigation.  The
+writes ``entity cw:hasQuery world`` for entity-first navigation.  The
 counterfactual module can also pose a *hypothetical* unit — observed values
 supplied by hand, no entity behind them — which is what makes an imported model
-usable with no training data attached.  Such a world omits ``ckg:aboutEntity``
-and ``ckg:hasQuery`` entirely (absence is the statement: there is no resource to
+usable with no training data attached.  Such a world omits ``cw:aboutEntity``
+and ``cw:hasQuery`` entirely (absence is the statement: there is no resource to
 point at) and folds its observed values into its own IRI, so two hypothetical
 units differing only in what was observed do not collide on one world resource.
 
 Intervention and query IRIs for *named* units are minted by
-:mod:`causalkg.queries`, not re-derived here, so a world exported through this
+:mod:`causalway.queries`, not re-derived here, so a world exported through this
 module and the same intervention stored through ``store_query`` are the *same*
 resources.
 """
@@ -97,7 +97,7 @@ from rdflib import Graph
 from .queries import Intervention, Query, intervention_iri, query_iri
 from .rdfizer import check_quote_free, materialise
 from .result import OntologicalCausalGraph
-from .vocab import (ANSWER_STEM, CKG, MODEL_STEM, PROV, QUERY_STEM, XSD,
+from .vocab import (ANSWER_STEM, CW, MODEL_STEM, PROV, QUERY_STEM, XSD,
                     value_datatype, vocabulary)
 
 __all__ = ["CounterfactualWorld", "worlds_to_json", "worlds_to_rdf",
@@ -144,7 +144,7 @@ class CounterfactualWorld:
     label: Optional[str] = None
 
     def as_query(self) -> Query:
-        """The :class:`~causalkg.queries.Query` whose IRI is this world's IRI.
+        """The :class:`~causalway.queries.Query` whose IRI is this world's IRI.
 
         Named units only.  ``Query(kind="counterfactual")`` requires an entity
         by construction, which is the right rule for the query log — a
@@ -167,7 +167,7 @@ class CounterfactualWorld:
         )
 
     def acts(self) -> list:
-        """The world's interventions as :class:`~causalkg.queries.Intervention` objects."""
+        """The world's interventions as :class:`~causalway.queries.Intervention` objects."""
         return [Intervention(node=node, value=value, entity=self.entity)
                 for node, value in sorted(self.interventions.items())]
 
@@ -287,7 +287,7 @@ def worlds_to_json(worlds, ocg: OntologicalCausalGraph,
     for a discretised one — pass it whenever a model is at hand.
 
     Nodes named in a world but absent from ``ocg`` are skipped rather than
-    guessed at — a value with no ``ckg:PropertyNode`` to hang off has no place
+    guessed at — a value with no ``cw:PropertyNode`` to hang off has no place
     in the graph.
     """
     index = _node_index(ocg)
@@ -319,7 +319,7 @@ def worlds_to_json(worlds, ocg: OntologicalCausalGraph,
             ),
         }
         # Absent, not empty: a hypothetical unit has no entity resource, and the
-        # missing ckg:aboutEntity *is* how the document says so.
+        # missing cw:aboutEntity *is* how the document says so.
         if world.entity:
             row["entity"] = str(world.entity)
         if world.model_id:
@@ -372,7 +372,7 @@ def worlds_to_json(worlds, ocg: OntologicalCausalGraph,
 
         for name in sorted(world.counterfactual):
             # An intervened node has no counterfactual to report: its value is
-            # the treatment, already stated as ckg:setValue on the Intervention.
+            # the treatment, already stated as cw:setValue on the Intervention.
             if name in world.interventions or name not in index:
                 continue
             k = index[name]
@@ -451,7 +451,7 @@ def worlds_to_rdf(worlds, ocg: OntologicalCausalGraph, *,
     merging it into the source KG contradicts nothing there.
     """
     g = Graph() if graph is None else graph
-    g.bind("ckg", CKG)
+    g.bind("cw", CW)
     g.bind("prov", PROV)
     if with_vocabulary:
         vocabulary(g)

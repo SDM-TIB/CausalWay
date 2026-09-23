@@ -67,7 +67,7 @@ def _invertibility_p_values(model, max_num_samples: int = 2000,
     Gumbel-max noise is a length-``n_classes`` vector per row, packed into an
     object array so it survives ``dowhy.gcm``'s per-node noise ``DataFrame``
     column (``_noise.compute_noise_from_data``, needed for
-    ``counterfactual_samples`` — see ``causalkg.mechanisms``); that packed
+    ``counterfactual_samples`` — see ``causalway.mechanisms``); that packed
     form crashes gcm's kernel test (``np.unique`` on an array of arrays). This
     unpacks it first, then reuses the same test and the same Bonferroni FDR
     correction gcm's own version applies.

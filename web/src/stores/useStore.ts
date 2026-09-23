@@ -73,7 +73,15 @@ interface State {
   typeOptions: TypeOptions
   dtypes: Record<string, DType>
   components: ComponentInfo[]
+  /**
+   * Which connected component the join runs over (W31). `null` == auto, i.e.
+   * `autoComponent` — whichever holds the most retained nodes, re-decided by the
+   * server on every curation change. Setting a number pins it, the same way a
+   * row limit pins "no limit".
+   */
   component: number | null
+  /** What the server would pick for `component: null` at this curation. */
+  autoComponent: number | null
   /** null == no SPARQL LIMIT. The default, and the whole point of W21. */
   limit: number | null
   mat: MatResult | null
@@ -81,6 +89,8 @@ interface State {
   /** The SPARQL `materialise` would run right now, kept live so the user can check the
    *  join's shape before running it — never touches the join itself (Preprocess revision 3). */
   graphPattern: GraphPatternPreview | null
+  /** Why there is no graph pattern — the server's own reason, not a blank box (W31). */
+  graphPatternError: string | null
   layouts: Layouts
 
   // --- discovery ----------------------------------------------------- //
@@ -156,6 +166,8 @@ interface State {
   setPanelHeight: (id: string, px: number | null) => void
   toggleTheme: () => void
   setLimit: (n: number | null) => void
+  /** W31 — pin the component the join runs over, or `null` to hand it back to auto. */
+  setComponent: (i: number | null) => Promise<void>
   /** Refetches the live "Graph Pattern" preview for the current curation state. */
   refreshGraphPattern: () => Promise<void>
 
@@ -250,7 +262,7 @@ const layoutTimers: Record<string, number> = {}
  */
 export const RAIL_MIN = 210
 export const RAIL_MAX = 620
-const UI_KEY = 'ckg-panes'
+const UI_KEY = 'cw-panes'
 
 function loadPanes(): { railWidth: { left: number; right: number }; panelHeight: Record<string, number> } {
   const fallback = { railWidth: { left: 288, right: 320 }, panelHeight: {} }
@@ -312,7 +324,11 @@ export const useStore = create<State>((set, get) => {
   async function afterSource(payload: SchemaPayload) {
     set({
       schema: payload, mat: null, matJob: null, ctx: null, runs: [], ledger: null,
-      graph: null, priors: null, graphPattern: null, ...MODEL_RESET,
+      graph: null, priors: null, graphPattern: null, graphPatternError: null,
+      // A component index only means anything against the schema it came from,
+      // so a new source hands the choice back to auto rather than keeping a
+      // number that now points at an unrelated part of a different ontology.
+      component: null, ...MODEL_RESET,
     })
     await get().refreshNodes()
     const layouts = await api.layout(get().projectId!)
@@ -328,6 +344,7 @@ export const useStore = create<State>((set, get) => {
       typeOptions: data.type_options,
       dtypes: data.dtypes,
       components: data.components,
+      autoComponent: data.auto_component,
     })
   }
 
@@ -373,10 +390,12 @@ export const useStore = create<State>((set, get) => {
     dtypes: {},
     components: [],
     component: null,
+    autoComponent: null,
     limit: null,
     mat: null,
     matJob: null,
     graphPattern: null,
+    graphPatternError: null,
     layouts: { ontology: {}, causal: {}, model: {}, inference: {}, counterfactual: {} },
 
     methods: [],
@@ -439,12 +458,31 @@ export const useStore = create<State>((set, get) => {
       set((s) => {
         const theme = s.theme === 'dark' ? 'light' : 'dark'
         document.documentElement.classList.toggle('dark', theme === 'dark')
-        localStorage.setItem('ckg-theme', theme)
+        localStorage.setItem('cw-theme', theme)
         return { theme }
       }),
     setLimit: (limit) => {
       set({ limit })
       void get().refreshGraphPattern()
+    },
+
+    /*
+     * W31 — picking a component is picking a different join, so everything
+     * fitted to the old one goes with it. Same cascade as a curation change
+     * (`pushNodes`): a frame drawn from component 11 is not a subset of
+     * component 3's, it is unrelated data with different columns, and a ledger
+     * indexed into the first one cannot be read against the second. The one
+     * thing kept is the stored layout, which is per-canvas and per-node, so the
+     * cards the user has already arranged stay where they put them.
+     */
+    setComponent: async (i) => {
+      if (get().component === i) return
+      set({
+        component: i,
+        mat: null, matJob: null, ctx: null, runs: [], ledger: null, graph: null,
+        priors: null, cycle: null, ...MODEL_RESET,
+      })
+      await get().refreshGraphPattern()
     },
 
     init: async () => {
@@ -462,10 +500,12 @@ export const useStore = create<State>((set, get) => {
         stats: null,
         components: [],
         component: null,
+        autoComponent: null,
         limit: null,
         mat: null,
         matJob: null,
         graphPattern: null,
+        graphPatternError: null,
         ctx: null,
         runs: [],
         ledger: null,
@@ -509,6 +549,7 @@ export const useStore = create<State>((set, get) => {
         // the previous session here would let module 1 render a schema that has
         // nothing to do with this project.
         schema: null, nodes: [], stats: null, components: [], component: null,
+        autoComponent: null, graphPatternError: null,
         mat: null, matJob: null, graphPattern: null, ctx: null, runs: [], ledger: null,
         graph: null, priors: null, cycle: null,
         ...MODEL_RESET,
@@ -565,17 +606,22 @@ export const useStore = create<State>((set, get) => {
     },
 
     refreshGraphPattern: async () => {
-      const { projectId, schema, limit } = get()
+      const { projectId, schema, limit, component } = get()
       if (!projectId || !schema) {
-        set({ graphPattern: null })
+        set({ graphPattern: null, graphPatternError: null })
         return
       }
       try {
-        set({ graphPattern: await api.materialisePreview(projectId, limit) })
-      } catch {
-        // Every node excluded, or the source went away mid-request — the box just
-        // goes empty rather than surfacing an error toast for a preview.
-        set({ graphPattern: null })
+        set({
+          graphPattern: await api.materialisePreview(projectId, limit, component),
+          graphPatternError: null,
+        })
+      } catch (e) {
+        // Still no toast — a preview failing is not an action failing. But the
+        // reason is kept and shown in the box: with a component picker the
+        // commonest failure is "component 3 has no retained nodes", and an
+        // empty box for that reads as a bug rather than as an answer (W31).
+        set({ graphPattern: null, graphPatternError: (e as ApiError).message || String(e) })
       }
     },
 
@@ -698,6 +744,12 @@ export const useStore = create<State>((set, get) => {
       }
       if (!job) return
       if (job.state === 'done' && job.result) {
+        // Pinning the component the join actually ran on, which under W31 is a
+        // deliberate narrowing rather than the only way it ever got set. Auto
+        // re-decides on every curation change, and module 2 passes `component`
+        // to `discovery/context` — leaving it on auto after a run would let a
+        // later exclusion move discovery onto a component the frame in `mat`
+        // did not come from.
         set({ mat: job.result, component: job.result.component })
         await get().refreshNodes() // picks up distinct counts and dtypes for the cards
         get().notify(

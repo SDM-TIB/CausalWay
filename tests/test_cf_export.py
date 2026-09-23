@@ -21,12 +21,12 @@ import numpy as np
 import pytest
 from rdflib import Literal, RDF, URIRef, XSD
 
-from causalkg.cf_export import CounterfactualWorld, worlds_to_json, worlds_to_rdf
-from causalkg.constraints import EdgeConstraint
-from causalkg.nodes import build_nodes
-from causalkg.ontology import OntologySchema
-from causalkg.result import OntologicalCausalGraph
-from causalkg.vocab import ANSWER_STEM, CKG, QUERY_STEM
+from causalway.cf_export import CounterfactualWorld, worlds_to_json, worlds_to_rdf
+from causalway.constraints import EdgeConstraint
+from causalway.nodes import build_nodes
+from causalway.ontology import OntologySchema
+from causalway.result import OntologicalCausalGraph
+from causalway.vocab import ANSWER_STEM, CW, QUERY_STEM
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLINIC = os.path.join(HERE, "kgs", "ttls", "synthetic_clinic.ttl")
@@ -57,7 +57,7 @@ def _world(ocg: OntologicalCausalGraph) -> CounterfactualWorld:
     """One entity under a *joint* intervention over two variables.
 
     ``a`` and ``b`` are intervened, so they get no estimate — their value is the
-    treatment, already stated once as ``ckg:setValue``.  ``c`` and ``d`` are the
+    treatment, already stated once as ``cw:setValue``.  ``c`` and ``d`` are the
     outcomes: one categorical (with a distribution behind it) and one continuous
     (with a standard deviation), which is exactly the pair the export types
     differently.
@@ -127,7 +127,7 @@ def test_an_intervened_node_gets_no_estimate(ocg):
 
 def test_world_iri_is_the_query_iri(ocg):
     """Plan 2 §6.0 principle 1: the query identifies the world, so no World class."""
-    from causalkg.queries import query_iri
+    from causalway.queries import query_iri
 
     world = _world(ocg)
     payload = worlds_to_json([world], ocg)
@@ -176,45 +176,45 @@ def cf_graph(ocg):
 
 
 def test_the_world_is_one_counterfactual_query(cf_graph, ocg):
-    from causalkg.queries import query_iri
+    from causalway.queries import query_iri
 
     world_iri = query_iri(_world(ocg).as_query())
-    assert (world_iri, RDF.type, CKG.CounterfactualQuery) in cf_graph
-    assert cf_graph.value(world_iri, CKG.aboutEntity) == URIRef(ENTITY)
-    assert cf_graph.value(world_iri, CKG.computedAt).datatype == XSD.dateTime
-    assert str(cf_graph.value(world_iri, CKG.counterfactualCoupling)) == "gumbel-max"
-    # A joint intervention is several ckg:hasIntervention on one world.
-    acts = list(cf_graph.objects(world_iri, CKG.hasIntervention))
+    assert (world_iri, RDF.type, CW.CounterfactualQuery) in cf_graph
+    assert cf_graph.value(world_iri, CW.aboutEntity) == URIRef(ENTITY)
+    assert cf_graph.value(world_iri, CW.computedAt).datatype == XSD.dateTime
+    assert str(cf_graph.value(world_iri, CW.counterfactualCoupling)) == "gumbel-max"
+    # A joint intervention is several cw:hasIntervention on one world.
+    acts = list(cf_graph.objects(world_iri, CW.hasIntervention))
     assert len(acts) == 2
     for act in acts:
-        assert (act, RDF.type, CKG.Intervention) in cf_graph
-        assert cf_graph.value(act, CKG.onEntity) == URIRef(ENTITY)
-        assert cf_graph.value(act, CKG.setValue) is not None
+        assert (act, RDF.type, CW.Intervention) in cf_graph
+        assert cf_graph.value(act, CW.onEntity) == URIRef(ENTITY)
+        assert cf_graph.value(act, CW.setValue) is not None
 
 
 def test_the_entity_iri_is_verbatim_in_subject_position(cf_graph, ocg):
     """The subject-template trap: a re-based IRI would break the merge silently."""
-    from causalkg.queries import query_iri
+    from causalway.queries import query_iri
 
     world_iri = query_iri(_world(ocg).as_query())
-    assert (URIRef(ENTITY), CKG.hasQuery, world_iri) in cf_graph
+    assert (URIRef(ENTITY), CW.hasQuery, world_iri) in cf_graph
     assert not [s for s in cf_graph.subjects()
                 if str(s).startswith("http://example.com/base/")]
 
 
 def test_every_non_intervened_node_gets_an_estimate_with_both_values(cf_graph, ocg):
-    estimates = list(cf_graph.subjects(RDF.type, CKG.CounterfactualEstimate))
+    estimates = list(cf_graph.subjects(RDF.type, CW.CounterfactualEstimate))
     assert len(estimates) == 2                      # c and d; a and b are intervened
     pairs = {}
     for estimate in estimates:
-        node = cf_graph.value(estimate, CKG.onNode)
-        assert cf_graph.value(estimate, CKG.onEntity) == URIRef(ENTITY)
-        assert cf_graph.value(estimate, CKG.onProperty) is not None
+        node = cf_graph.value(estimate, CW.onNode)
+        assert cf_graph.value(estimate, CW.onEntity) == URIRef(ENTITY)
+        assert cf_graph.value(estimate, CW.onProperty) is not None
         pairs[str(node)] = (
-            str(cf_graph.value(estimate, CKG.factualValue)),
-            str(cf_graph.value(estimate, CKG.predictedValue)),
+            str(cf_graph.value(estimate, CW.factualValue)),
+            str(cf_graph.value(estimate, CW.predictedValue)),
         )
-    # A counterfactual with no baseline is unreadable; ckg:factualValue exists
+    # A counterfactual with no baseline is unreadable; cw:factualValue exists
     # for exactly this, and is the only term this export had to mint.
     assert all(factual and predicted for factual, predicted in pairs.values())
     assert any(factual != predicted for factual, predicted in pairs.values())
@@ -222,56 +222,56 @@ def test_every_non_intervened_node_gets_an_estimate_with_both_values(cf_graph, o
 
 def test_the_distribution_sub_tree_is_gone(cf_graph):
     """1 + k extra subjects per node per world, answering a question nobody asked."""
-    assert not list(cf_graph.subjects(RDF.type, CKG.CategoricalDistribution))
-    assert not list(cf_graph.subjects(RDF.type, CKG.Outcome))
-    assert not list(cf_graph.subject_objects(CKG.uncertainty))
-    assert not list(cf_graph.subject_objects(CKG.outcomeValue))
+    assert not list(cf_graph.subjects(RDF.type, CW.CategoricalDistribution))
+    assert not list(cf_graph.subjects(RDF.type, CW.Outcome))
+    assert not list(cf_graph.subject_objects(CW.uncertainty))
+    assert not list(cf_graph.subject_objects(CW.outcomeValue))
 
 
 def test_a_categorical_estimate_carries_the_arg_max_probability(cf_graph, ocg):
     """What replaced the distribution: the mass of the value actually reported."""
     c = _names(ocg)[2]
     node_iri = ocg.node_iri(_names(ocg).index(c))
-    estimate = next(s for s in cf_graph.subjects(RDF.type, CKG.CounterfactualEstimate)
-                    if cf_graph.value(s, CKG.onNode) == node_iri)
-    assert str(cf_graph.value(estimate, CKG.predictedValue)) == "East"
-    probability = cf_graph.value(estimate, CKG.probability)
+    estimate = next(s for s in cf_graph.subjects(RDF.type, CW.CounterfactualEstimate)
+                    if cf_graph.value(s, CW.onNode) == node_iri)
+    assert str(cf_graph.value(estimate, CW.predictedValue)) == "East"
+    probability = cf_graph.value(estimate, CW.probability)
     assert probability.datatype == XSD.double
     assert float(probability) == pytest.approx(0.7)   # P(East), not P(some other level)
     # A categorical counterfactual is a draw, not an inversion: no sd.
-    assert cf_graph.value(estimate, CKG.standardDeviation) is None
+    assert cf_graph.value(estimate, CW.standardDeviation) is None
 
 
 def test_a_continuous_estimate_carries_sd_and_the_world_carries_row_count(cf_graph, ocg):
     """sd alone is uninterpretable — row_count says whether row duplication is in it."""
-    from causalkg.queries import query_iri
+    from causalway.queries import query_iri
 
     d = _names(ocg)[3]
     node_iri = ocg.node_iri(_names(ocg).index(d))
-    estimate = next(s for s in cf_graph.subjects(RDF.type, CKG.CounterfactualEstimate)
-                    if cf_graph.value(s, CKG.onNode) == node_iri)
-    sd = cf_graph.value(estimate, CKG.standardDeviation)
+    estimate = next(s for s in cf_graph.subjects(RDF.type, CW.CounterfactualEstimate)
+                    if cf_graph.value(s, CW.onNode) == node_iri)
+    sd = cf_graph.value(estimate, CW.standardDeviation)
     assert sd.datatype == XSD.double and float(sd) == pytest.approx(3.25)
     # A continuous counterfactual is a deterministic inversion: no probability.
-    assert cf_graph.value(estimate, CKG.probability) is None
+    assert cf_graph.value(estimate, CW.probability) is None
 
     world_iri = query_iri(_world(ocg).as_query())
-    assert int(cf_graph.value(world_iri, CKG.rowCount)) == 1
-    assert int(cf_graph.value(world_iri, CKG.randomSeed)) == 7
+    assert int(cf_graph.value(world_iri, CW.rowCount)) == 1
+    assert int(cf_graph.value(world_iri, CW.randomSeed)) == 7
 
 
 def test_a_continuous_value_is_typed_and_a_categorical_one_is_not(cf_graph, ocg):
     """The whole point of the datatypeMap work: 111.017 is a double, "East" is not
     stamped with a type it does not have."""
     names = _names(ocg)
-    continuous = next(s for s in cf_graph.subjects(RDF.type, CKG.CounterfactualEstimate)
-                      if cf_graph.value(s, CKG.onNode) == ocg.node_iri(3))
-    for term in (CKG.predictedValue, CKG.factualValue):
+    continuous = next(s for s in cf_graph.subjects(RDF.type, CW.CounterfactualEstimate)
+                      if cf_graph.value(s, CW.onNode) == ocg.node_iri(3))
+    for term in (CW.predictedValue, CW.factualValue):
         assert cf_graph.value(continuous, term).datatype == XSD.double
 
-    categorical = next(s for s in cf_graph.subjects(RDF.type, CKG.CounterfactualEstimate)
-                       if cf_graph.value(s, CKG.onNode) == ocg.node_iri(2))
-    for term in (CKG.predictedValue, CKG.factualValue):
+    categorical = next(s for s in cf_graph.subjects(RDF.type, CW.CounterfactualEstimate)
+                       if cf_graph.value(s, CW.onNode) == ocg.node_iri(2))
+    for term in (CW.predictedValue, CW.factualValue):
         # RDF 1.1: a plain literal already *is* an xsd:string, so writing the
         # type out would be noise — and a discretised bin is not a double.
         assert cf_graph.value(categorical, term).datatype is None
@@ -289,7 +289,7 @@ def test_annotation_form_asserts_no_entity_property_value_triple(cf_graph, ocg):
 
 def test_no_diagnostics_json_literal_is_written(cf_graph):
     """§6.6, and a hard engine limit: a JSON literal cannot survive the quote rewrite."""
-    assert not list(cf_graph.subject_objects(CKG.diagnostics))
+    assert not list(cf_graph.subject_objects(CW.diagnostics))
 
 
 def test_worlds_to_rdf_accumulates_into_a_given_graph(ocg):
@@ -302,7 +302,7 @@ def test_worlds_to_rdf_accumulates_into_a_given_graph(ocg):
     other.model_id = "m-999"
     worlds_to_rdf([other], ocg, graph=store)
     assert len(store) > first
-    assert len(list(store.subjects(RDF.type, CKG.CounterfactualQuery))) == 2
+    assert len(list(store.subjects(RDF.type, CW.CounterfactualQuery))) == 2
 
 
 # ---------------------------------------------------------------------- #
@@ -319,14 +319,14 @@ def _hypothetical(ocg: OntologicalCausalGraph, **observed) -> CounterfactualWorl
 
 
 def test_a_hypothetical_unit_has_no_entity_and_no_entity_navigation(ocg):
-    """Absence is the statement: there is no resource to point ckg:aboutEntity at."""
+    """Absence is the statement: there is no resource to point cw:aboutEntity at."""
     graph = worlds_to_rdf([_hypothetical(ocg)], ocg, dtypes=_dtypes(ocg))
-    worlds = list(graph.subjects(RDF.type, CKG.CounterfactualQuery))
+    worlds = list(graph.subjects(RDF.type, CW.CounterfactualQuery))
     assert len(worlds) == 1
-    assert graph.value(worlds[0], CKG.aboutEntity) is None
-    assert not list(graph.subject_objects(CKG.hasQuery))
+    assert graph.value(worlds[0], CW.aboutEntity) is None
+    assert not list(graph.subject_objects(CW.hasQuery))
     # ...but it is still a complete world: the estimates are all there.
-    assert len(list(graph.subjects(RDF.type, CKG.CounterfactualEstimate))) == 2
+    assert len(list(graph.subjects(RDF.type, CW.CounterfactualEstimate))) == 2
 
 
 def test_two_hypothetical_units_differing_only_in_observations_do_not_collide(ocg):
@@ -348,8 +348,8 @@ def test_two_hypothetical_units_differing_only_in_observations_do_not_collide(oc
 def test_a_named_and_a_hypothetical_world_export_together(ocg):
     """The mixed case is the one that crashed the engine before `worlds_named`."""
     graph = worlds_to_rdf([_world(ocg), _hypothetical(ocg)], ocg, dtypes=_dtypes(ocg))
-    assert len(list(graph.subjects(RDF.type, CKG.CounterfactualQuery))) == 2
-    assert len(list(graph.subject_objects(CKG.hasQuery))) == 1   # only the named one
+    assert len(list(graph.subjects(RDF.type, CW.CounterfactualQuery))) == 2
+    assert len(list(graph.subject_objects(CW.hasQuery))) == 1   # only the named one
 
 
 # ---------------------------------------------------------------------- #
@@ -362,11 +362,11 @@ def test_the_rdf_reproduces_the_world_it_was_built_from(ocg):
     graph = worlds_to_rdf([world], ocg, dtypes=_dtypes(ocg))
 
     rows = graph.query("""
-        PREFIX ckg: <http://sdm-causalkg.org/>
+        PREFIX cw: <http://sdm-causalway.org/>
         SELECT ?node ?predicted ?factual WHERE {
-            ?e a ckg:CounterfactualEstimate ;
-               ckg:forQuery ?w ; ckg:onNode ?node ;
-               ckg:predictedValue ?predicted ; ckg:factualValue ?factual .
+            ?e a cw:CounterfactualEstimate ;
+               cw:forQuery ?w ; cw:onNode ?node ;
+               cw:predictedValue ?predicted ; cw:factualValue ?factual .
         }
     """)
     by_node = {str(node): (predicted, factual) for node, predicted, factual in rows}
@@ -382,9 +382,9 @@ def test_the_rdf_reproduces_the_world_it_was_built_from(ocg):
         assert got_factual.toPython() == world.factual[name]
 
     acts = graph.query("""
-        PREFIX ckg: <http://sdm-causalkg.org/>
+        PREFIX cw: <http://sdm-causalway.org/>
         SELECT ?node ?value WHERE {
-            ?w ckg:hasIntervention ?i . ?i ckg:onNode ?node ; ckg:setValue ?value .
+            ?w cw:hasIntervention ?i . ?i cw:onNode ?node ; cw:setValue ?value .
         }
     """)
     got = {str(node): value.toPython() for node, value in acts}

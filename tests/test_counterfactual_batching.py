@@ -3,7 +3,7 @@
 Abduction and evaluation are row-wise and independent across rows, so "n draws
 for this unit" and "one draw for n tiled copies of this unit" are the same
 computation. That identity is what makes the batching in
-``causalkg.inference.counterfactual`` legal, and it is what these tests pin:
+``causalway.inference.counterfactual`` legal, and it is what these tests pin:
 tiling must not change the distribution, must not correlate the draws, and must
 not quietly change what ``n_samples`` counts or what ``per_row`` is about.
 
@@ -28,11 +28,11 @@ pytest.importorskip("pgmpy")
 
 import numpy as np  # noqa: E402
 
-from causalkg import inference  # noqa: E402
-from causalkg.model import CausalModel  # noqa: E402
-from causalkg.nodes import build_nodes  # noqa: E402
-from causalkg.result import OntologicalCausalGraph  # noqa: E402
-from causalkg.sources import resolve_schema  # noqa: E402
+from causalway import inference  # noqa: E402
+from causalway.model import CausalModel  # noqa: E402
+from causalway.nodes import build_nodes  # noqa: E402
+from causalway.result import OntologicalCausalGraph  # noqa: E402
+from causalway.sources import resolve_schema  # noqa: E402
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLINIC_TTL = os.path.join(_ROOT, "kgs", "ttls", "synthetic_clinic.ttl")

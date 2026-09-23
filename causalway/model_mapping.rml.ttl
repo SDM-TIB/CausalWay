@@ -1,0 +1,184 @@
+# RML mapping: fitted-model JSON -> cw: RDF (Plan 2 Layer A).
+#
+# This file *is* the specification of how a fitted model becomes triples.
+# Nothing in `causalway/model_export.py` adds a triple of its own.  Change the
+# shape of the exported model here, not in Python.
+#
+# Read `ocg_mapping.rml.ttl`'s header for the three engine constraints that
+# dictate the shapes below; they apply here unchanged.  Two consequences are
+# worth naming at this file's own scale:
+#
+#   1. The fit run's hyper-parameters are `cw:Parameter` resources, not one
+#      `cw:parameters` JSON literal.  The hand-written export this mapping
+#      replaced emitted that literal — and `cw:parameters` is a *legacy* term
+#      in `vocab.py`, retired for the discovery run for exactly this reason:
+#      SDM-RDFizer rewrites `"` and `'` irreversibly through `rml:reference`,
+#      and a JSON object is all quotes.
+#
+#   2. `cw:trainedOn` is a literal, not an IRI.  The source may be a filesystem
+#      path; the export records where the data came from rather than minting a
+#      resource for something that may not be dereferenceable, or even a URL.
+#
+# A mechanism assignment's IRI is the model's IRI plus `/mechanism/<node>`, so
+# it is stable across runs of the same model and needs no separate stem in
+# `vocab.py`.  The node fragment is slugged, because a subject template is the
+# one position where the engine percent-encodes what it interpolates.
+
+@prefix rr:   <http://www.w3.org/ns/r2rml#> .
+@prefix rml:  <http://semweb.mmlab.be/ns/rml#> .
+@prefix ql:   <http://semweb.mmlab.be/ns/ql#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix cw:   <http://sdm-causalway.org/> .
+
+# --------------------------------------------------------------------------- #
+# The model
+# --------------------------------------------------------------------------- #
+<#ModelMap>
+    a rr:TriplesMap ;
+    rml:logicalSource [
+        rml:source "model.json" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.models[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://sdm-causalway.org/model/{model_key}" ;
+        rr:class cw:CausalModel ;
+        rr:class prov:Entity
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate rdfs:label ;
+        rr:objectMap [ rml:reference "label" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:overGraph ;
+        rr:objectMap [ rr:template "{graph_iri}" ; rr:termType rr:IRI ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:trainedOn ;
+        rr:objectMap [ rml:reference "trained_on" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:trainingRows ;
+        rr:objectMap [ rml:reference "training_rows" ; rr:datatype xsd:integer ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:library ;
+        rr:objectMap [ rml:reference "library" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:libraryVersion ;
+        rr:objectMap [ rml:reference "library_version" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate prov:wasGeneratedBy ;
+        rr:objectMap [ rr:template "{run_iri}" ; rr:termType rr:IRI ]
+    ] .
+
+# --------------------------------------------------------------------------- #
+# The fit run that produced it
+# --------------------------------------------------------------------------- #
+<#ModelFitRunMap>
+    a rr:TriplesMap ;
+    rml:logicalSource [
+        rml:source "model.json" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.runs[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://sdm-causalway.org/modelrun/{run_key}" ;
+        rr:class cw:ModelFitRun ;
+        rr:class prov:Activity
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate prov:endedAtTime ;
+        rr:objectMap [ rml:reference "ended_at" ; rr:datatype xsd:dateTime ]
+    ] .
+
+<#ModelFitParameterMap>
+    a rr:TriplesMap ;
+    rml:logicalSource [
+        rml:source "model.json" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.run_parameters[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://sdm-causalway.org/modelrun/{run_key}/parameter/{param_key}" ;
+        rr:class cw:Parameter
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:parameterName ;
+        rr:objectMap [ rml:reference "name" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:parameterValue ;
+        rr:objectMap [ rml:reference "value" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:parameterKind ;
+        rr:objectMap [ rml:reference "kind" ]
+    ] .
+
+<#RunHasParameterMap>
+    a rr:TriplesMap ;
+    rml:logicalSource [
+        rml:source "model.json" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.run_parameters[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://sdm-causalway.org/modelrun/{run_key}"
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:hasParameter ;
+        rr:objectMap [
+            rr:template "http://sdm-causalway.org/modelrun/{run_key}/parameter/{param_key}" ;
+            rr:termType rr:IRI
+        ]
+    ] .
+
+# --------------------------------------------------------------------------- #
+# One mechanism assignment per node
+# --------------------------------------------------------------------------- #
+<#MechanismMap>
+    a rr:TriplesMap ;
+    rml:logicalSource [
+        rml:source "model.json" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.mechanisms[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://sdm-causalway.org/model/{model_key}/mechanism/{node_slug}" ;
+        rr:class cw:MechanismAssignment
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:mechanismType ;
+        rr:objectMap [ rml:reference "mechanism_type" ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:invertible ;
+        rr:objectMap [ rml:reference "invertible" ; rr:datatype xsd:boolean ]
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:counterfactualCoupling ;
+        rr:objectMap [ rml:reference "coupling" ]
+    ] .
+
+<#ModelHasMechanismMap>
+    a rr:TriplesMap ;
+    rml:logicalSource [
+        rml:source "model.json" ;
+        rml:referenceFormulation ql:JSONPath ;
+        rml:iterator "$.mechanisms[*]"
+    ] ;
+    rr:subjectMap [
+        rr:template "http://sdm-causalway.org/model/{model_key}"
+    ] ;
+    rr:predicateObjectMap [
+        rr:predicate cw:hasMechanism ;
+        rr:objectMap [
+            rr:template "http://sdm-causalway.org/model/{model_key}/mechanism/{node_slug}" ;
+            rr:termType rr:IRI
+        ]
+    ] .

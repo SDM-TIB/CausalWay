@@ -21,7 +21,7 @@ function Wordmark() {
         <circle cx="20" cy="8.5" r="2.6" fill="var(--ck-sky)" />
         <circle cx="14" cy="19.5" r="3" fill="var(--ck-indigo)" />
       </svg>
-      <span className="text-[14px] font-semibold tracking-tight">CausalKG</span>
+      <span className="text-[14px] font-semibold tracking-tight">CausalWay</span>
     </div>
   )
 }

@@ -4,9 +4,9 @@ import numpy as np
 from rdflib import Graph, Literal, Namespace, RDF, RDFS, OWL
 from rdflib.namespace import XSD
 
-from causalkg.ontology import OntologySchema
-from causalkg.nodes import build_nodes
-from causalkg.constraints import EdgeConstraint
+from causalway.ontology import OntologySchema
+from causalway.nodes import build_nodes
+from causalway.constraints import EdgeConstraint
 
 TOY = Namespace("http://toy/")
 

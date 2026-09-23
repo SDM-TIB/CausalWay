@@ -22,8 +22,8 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
-from causalkg.model import CausalModel
-from causalkg.queries import Condition, Intervention, Query, store_query, validate_query
+from causalway.model import CausalModel
+from causalway.queries import Condition, Intervention, Query, store_query, validate_query
 
 
 def _parse_kv(pairs) -> dict:

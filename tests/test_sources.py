@@ -1,12 +1,12 @@
-"""Tests for polymorphic input resolution (causalkg.sources)."""
+"""Tests for polymorphic input resolution (causalway.sources)."""
 
 import os
 
 import rdflib
 
-from causalkg.ontology import OntologySchema
-from causalkg.result import OntologicalCausalGraph
-from causalkg.sources import is_endpoint, list_ocgs, load_ocg, resolve_graph, resolve_schema
+from causalway.ontology import OntologySchema
+from causalway.result import OntologicalCausalGraph
+from causalway.sources import is_endpoint, list_ocgs, load_ocg, resolve_graph, resolve_schema
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCLC_TTL = os.path.join(_ROOT, "kgs", "ttls", "SCLC_patients.ttl")
@@ -41,7 +41,7 @@ def test_resolve_schema_file_infers_missing_by_default():
 def test_resolve_schema_endpoint_defaults_infer_missing_false(monkeypatch, capsys):
     # Avoid a real network call: patch resolve_graph to return a local graph
     # while still exercising the endpoint-detection branch of resolve_schema.
-    import causalkg.sources as sources_mod
+    import causalway.sources as sources_mod
 
     g = rdflib.Graph()
     g.parse(SCLC_TTL)

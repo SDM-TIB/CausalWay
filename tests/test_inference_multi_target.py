@@ -5,7 +5,7 @@ fixture goes through ``load_ocg(results/sclc/GES.ttl)``, and reading an OCG
 back from Turtle is broken independently of anything here (the same
 pre-existing failure as ``test_result_roundtrip.py`` / ``test_sources.py``).
 So this module builds its causal graph **in memory** from
-``causalkg.synthetic``'s ground truth instead, which keeps the multi-target
+``causalway.synthetic``'s ground truth instead, which keeps the multi-target
 engines covered without waiting on that bug.
 
 Deliberately small: four nodes out of the eleven, so a real ``gcm`` fit stays
@@ -21,15 +21,15 @@ pytest.importorskip("pgmpy")
 
 import numpy as np  # noqa: E402
 
-from causalkg.model import CausalModel  # noqa: E402
-from causalkg.nodes import build_nodes  # noqa: E402
-from causalkg.result import OntologicalCausalGraph  # noqa: E402
-from causalkg.sources import resolve_schema  # noqa: E402
+from causalway.model import CausalModel  # noqa: E402
+from causalway.nodes import build_nodes  # noqa: E402
+from causalway.result import OntologicalCausalGraph  # noqa: E402
+from causalway.sources import resolve_schema  # noqa: E402
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLINIC_TTL = os.path.join(_ROOT, "kgs", "ttls", "synthetic_clinic.ttl")
 
-# A connected four-node slice of causalkg.synthetic's ground truth.
+# A connected four-node slice of causalway.synthetic's ground truth.
 SUBGRAPH = [
     ("Patient.tumorStage", "Patient.survival"),
     ("Patient.tumorStage", "Therapy.dosage"),
@@ -101,6 +101,16 @@ def test_batched_answers_share_one_computation(model, evidence):
                             backend="likelihood-weighting", num_samples=2000)
     esses = {a.ess for a in batch.values()}
     assert len(esses) == 1
+
+
+def test_a_root_target_is_answered_by_its_marginal_not_tier_0(model):
+    """A root's mechanism is a plain distribution with no noise to draw; tier 0 used
+    to call draw_noise_samples on it and crash (notebook 05's multi-target cell)."""
+    alone = model.condition("Patient.tumorStage", {})
+    assert alone.backend != "mechanism"
+    assert alone.distribution and sum(alone.distribution.values()) == pytest.approx(1.0)
+    batch = model.condition(["Patient.tumorStage", "Therapy.toxicity"], {})
+    assert set(batch) == {"Patient.tumorStage", "Therapy.toxicity"}
 
 
 def test_an_unknown_target_is_named(model, evidence):

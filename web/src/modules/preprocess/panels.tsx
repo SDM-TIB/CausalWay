@@ -112,13 +112,173 @@ export function SchemaPanel() {
           </Note>
         </div>
       )}
-      <div className="mt-2 flex flex-wrap gap-1">
+      {/* Capped and scrollable: this is a *summary* panel, and an endpoint with
+          97 classes turned it into a wall of chips that pushed every panel
+          under it off the screen. */}
+      <div className="mt-2 flex max-h-44 flex-wrap gap-1 overflow-y-auto">
         {s.classes.map((c) => (
           <Badge key={c} tone="teal">
             {c}
           </Badge>
         ))}
       </div>
+    </Panel>
+  )
+}
+
+/**
+ * Which connected component the join runs over (W31).
+ *
+ * One `materialise` is one basic graph pattern over one component, and that is
+ * not a limitation to be lifted: Assumption 1 forbids every edge between two
+ * classes with no relation path, so joining two components could only produce a
+ * cross product with no admissible edge across it. The limitation was that the
+ * component was never *chosen* — the server picked the largest and the client
+ * never sent anything else, which is invisible on a one-component sample KG and
+ * hides sixty-nine out of seventy on a real endpoint.
+ *
+ * `auto` is kept as the resting state rather than replaced by a forced pick,
+ * because it is right on every single-component KG and it re-decides as the
+ * curation changes. Pinning one is the override, exactly as a row limit
+ * overrides "no limit" in the materialise panel.
+ */
+export function ComponentPanel() {
+  const { components, component, autoComponent, schema, setComponent } = useStore()
+  const [open, setOpen] = useState(false)
+  if (!schema || components.length === 0) return null
+
+  const effective = component ?? autoComponent
+  const active = components.find((c) => c.index === effective) ?? null
+  // Ordered by size for the picker only — `index` stays the server's, because it
+  // is the value every route is called with.
+  const ordered = [...components].sort(
+    (a, b) => b.n_retained - a.n_retained || b.n_nodes - a.n_nodes || a.index - b.index,
+  )
+
+  // One component is the ordinary case (both bundled samples), and a picker
+  // offering a choice of one is noise. Report it and stop.
+  if (components.length === 1) {
+    return (
+      <Panel step="1·3" title="Join scope">
+        <Note tone="ok">
+          The class graph is connected — one component, {components[0].n_nodes} candidate
+          nodes — so there is only one join to make and nothing to choose.
+        </Note>
+      </Panel>
+    )
+  }
+
+  return (
+    <Panel
+      step="1·3"
+      title="Join scope — connected component"
+      right={
+        <div className="flex items-center gap-1.5">
+          <Badge tone="teal">{components.length}</Badge>
+          <Info>
+            The flat join is <strong>one</strong> SPARQL basic graph pattern over{' '}
+            <strong>one</strong> connected component of the class graph. Assumption 1 forbids
+            every edge between two classes with no relation path, so an edge across two
+            components is inadmissible by construction — joining them would compute a cross
+            product that no causal edge could ever cross (Plan 3 §3.6).
+            <br />
+            So a KG with several components is several separate analyses, not one. This is
+            where you choose which. Everything below follows it: the curation list, the live
+            SPARQL, the join, and the discovery run.
+            <br />
+            <strong>auto</strong> means the component holding the most retained nodes,
+            re-decided whenever you change the curation. Materialising pins whichever one
+            actually ran.
+          </Info>
+        </div>
+      }
+      bodyClass="space-y-2.5"
+    >
+      <Field label="Component">
+        <Select
+          value={effective === null ? '' : String(effective)}
+          onChange={(e) => setComponent(e.target.value === '' ? null : Number(e.target.value))}
+        >
+          {effective === null && <option value="">— nothing retained —</option>}
+          {/*
+            Components with nothing to select are listed, not hidden. On this
+            endpoint 61 of 70 are single classes declaring no properties at all,
+            and dropping them would quietly renumber the user's mental model of
+            a schema they can see in full on the canvas. Marked instead, and
+            sorted last, so the pickable ones are the ones at the top.
+          */}
+          {ordered.map((c) => (
+            <option key={c.index} value={c.index}>
+              {c.index} · {c.n_retained}/{c.n_nodes} nodes · {c.classes.slice(0, 3).join(', ')}
+              {c.classes.length > 3 ? ` +${c.classes.length - 3}` : ''}
+              {c.n_retained === 0 ? ' — nothing to select' : ''}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {component === null ? (
+          <Badge tone="muted" title="Following the curation — the component with the most retained nodes.">
+            auto
+          </Badge>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => setComponent(null)}>
+            Back to auto
+          </Button>
+        )}
+        {active && (
+          <>
+            <Badge tone="teal">
+              {active.n_classes} class{active.n_classes === 1 ? '' : 'es'}
+            </Badge>
+            <Badge tone={active.n_retained > 0 ? 'indigo' : 'red'}>
+              {active.n_retained}/{active.n_nodes} retained
+            </Badge>
+          </>
+        )}
+      </div>
+
+      {/* Two different states that both read as "0 retained", with two
+          different fixes — one is curation, the other is the ontology. */}
+      {active && active.n_retained === 0 && (
+        <Note tone="err">
+          {active.n_nodes === 0 ? (
+            <>
+              {active.n_classes === 1 ? 'This class declares' : 'These classes declare'} no
+              properties at all, so this component yields no candidate nodes and there is
+              nothing here to join. Nothing to fix in the curation — pick another component.
+            </>
+          ) : (
+            <>
+              All {active.n_nodes} of this component&apos;s nodes are excluded, so there is no
+              column to select and the join has nothing to return. Keep at least one of them in
+              the curation panel, or pick another component.
+            </>
+          )}
+        </Note>
+      )}
+
+      {active && (
+        <div>
+          <button
+            className="text-[11px] text-faint underline decoration-dotted underline-offset-2 hover:text-ink"
+            onClick={() => setOpen((o) => !o)}
+          >
+            {open ? 'Hide' : 'Show'} its {active.n_classes} class
+            {active.n_classes === 1 ? '' : 'es'}
+          </button>
+          {open && (
+            <div className="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
+              {active.classes.map((c) => (
+                <Badge key={c} tone="teal">
+                  {c}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </Panel>
   )
 }
@@ -194,30 +354,61 @@ export function ConstraintPanel() {
 
 export function NodeCurationPanel() {
   const { nodes, setExclusions, toggleNode, setObjectRole, schema } = useStore()
+  const { components, component, autoComponent } = useStore()
   const [filter, setFilter] = useState('')
   const [only, setOnly] = useState<'all' | 'data' | 'object' | 'excluded'>('all')
+  /*
+   * W31 — the list is scoped to the component being joined, because a node
+   * outside it is not in the query on screen and cannot be put there by
+   * curating it. Including or excluding one still *works* — it moves that other
+   * component's own join — it just has no visible effect here, which used to
+   * make "Exclude shown" feel broken on a 70-component schema. Off is the
+   * escape hatch for curating a component you are not currently joining.
+   */
+  const [scoped, setScoped] = useState(true)
+
+  const effective = component ?? autoComponent
+  const multi = components.length > 1
+
+  const inScope = useMemo(
+    () => (multi && scoped && effective !== null
+      ? nodes.filter((n) => n.component === effective)
+      : nodes),
+    [nodes, multi, scoped, effective],
+  )
 
   const shown = useMemo(() => {
     const f = filter.trim().toLowerCase()
-    return nodes.filter((n) => {
+    return inScope.filter((n) => {
       if (f && !n.name.toLowerCase().includes(f)) return false
       if (only === 'data') return n.kind === 'data'
       if (only === 'object') return n.kind === 'object'
       if (only === 'excluded') return n.excluded
       return true
     })
-  }, [nodes, filter, only])
+  }, [inScope, filter, only])
 
   if (!schema) return null
 
   return (
     <Panel
-      step="1·3"
+      step="1·4"
       title="Candidate nodes & curation"
       right={
         <div className="flex items-center gap-1.5">
-          <Badge tone="indigo">{nodes.filter((n) => !n.excluded).length}/{nodes.length}</Badge>
+          <Badge tone="indigo">
+            {inScope.filter((n) => !n.excluded).length}/{inScope.length}
+          </Badge>
           <Info>
+            {multi && (
+              <>
+                The list is scoped to <strong>component {effective}</strong> — the one the
+                join above runs over. A node in another component is not in that query and
+                cannot be curated into it; switch components, or turn the scope off to reach
+                them anyway.
+                <br />
+              </>
+            )}
             Excluding a <strong className="text-muted">data</strong> property only drops its{' '}
             <strong className="text-muted">column</strong> — its required pattern stays either
             way, so <strong className="text-teal">the row count never changes.</strong>
@@ -229,11 +420,37 @@ export function NodeCurationPanel() {
             range class's own properties no longer ride along. It used to be allowed to be both,
             which put a column in the frame that was a deterministic function of the join that
             produced the row.
+            <br />
+            An object property whose range class declares{' '}
+            <strong className="text-muted">no data properties</strong> is marked{' '}
+            <strong className="text-green">cat</strong> and starts as a{' '}
+            <strong>variable</strong>: an age band or a tumour stage modelled as a class has
+            nothing to contribute through a join, and the one thing it does say — which instance
+            this entity points at — is only a column if the property is a variable. The role
+            selector still moves it back.
           </Info>
         </div>
       }
       bodyClass="space-y-2"
     >
+      {multi && (
+        <div className="flex items-center justify-between rounded-lg border border-line bg-surface2 px-2 py-1.5">
+          <span className="text-[11px] text-muted">
+            {scoped ? (
+              <>
+                Component <strong className="text-teal">{effective}</strong> only
+              </>
+            ) : (
+              <>All {components.length} components</>
+            )}
+          </span>
+          <Switch
+            label="Scope the list to the component being joined"
+            checked={scoped}
+            onChange={setScoped}
+          />
+        </div>
+      )}
       <Input placeholder="Filter…" value={filter} onChange={(e) => setFilter(e.target.value)} />
       <div className="flex flex-wrap gap-1">
         {(['all', 'data', 'object', 'excluded'] as const).map((k) => (
@@ -312,6 +529,37 @@ export function NodeCurationPanel() {
               >
                 {n.name}
               </span>
+              {/*
+                W30 — the range class has no data properties of its own, so it
+                is an attribute modelled as a class. Shown as a fact about the
+                schema, not as a state of the curation: it stays marked when the
+                user moves the role back to `rel`, because the reason it was
+                seeded as a variable is still true.
+              */}
+              {/* Only while the scope is off — with it on, every row has the
+                  same value and the column is pure noise (W31). */}
+              {multi && !scoped && n.component !== null && (
+                <span
+                  className={`shrink-0 rounded px-1 py-0.5 font-mono text-[9px] ${
+                    n.component === effective ? 'bg-teal/15 text-teal' : 'text-faint'
+                  }`}
+                  title={
+                    n.component === effective
+                      ? `Component ${n.component} — in the join currently on screen.`
+                      : `Component ${n.component} — not in the join currently on screen, so curating it changes a query you are not looking at.`
+                  }
+                >
+                  c{n.component}
+                </span>
+              )}
+              {n.auto_variable && (
+                <span
+                  className="shrink-0 rounded bg-green/15 px-1 py-0.5 font-mono text-[9px] uppercase text-green"
+                  title={`${n.range} declares no data properties — it is an attribute modelled as a class, so joining it contributes no columns. Started as a causal variable for that reason (W30); the role selector overrides it.`}
+                >
+                  cat
+                </span>
+              )}
               {n.n_distinct !== null && (
                 <span
                   className={`shrink-0 font-mono text-[10px] ${

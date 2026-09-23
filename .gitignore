@@ -35,6 +35,8 @@ kgs/output/
 
 # --------------------------------------------------------------------- os --
 .DS_Store
+# Keynote decks (talk slides live next to the code, not in it).
+*.key
 Thumbs.db
 
 # ------------------------------------------- local working notes (private) --

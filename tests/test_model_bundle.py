@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from causalkg.model import CausalModel, GRAPH_FILENAME
+from causalway.model import CausalModel, GRAPH_FILENAME
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CLINIC_TTL = os.path.join(_ROOT, "kgs", "ttls", "synthetic_clinic.ttl")

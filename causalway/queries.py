@@ -4,14 +4,14 @@ Implements Plan 2 §5.4 and §6: the query IRI *is* the hypothetical world
 (§6.0 principle 1), so ``store_query`` never mints a separate world resource;
 ``Answer`` stays a rich Python object (backend/ESS/per_row diagnostics) while
 its RDF projection stays minimal (§6.0 principle 4) — one
-``ckg:predictedValue`` term for both modalities (§6.0 principle 3).
+``cw:predictedValue`` term for both modalities (§6.0 principle 3).
 
 **Known inconsistency: this module still writes untyped literals.**
-:mod:`causalkg.cf_export` types every exported value — a continuous prediction
+:mod:`causalway.cf_export` types every exported value — a continuous prediction
 comes out as ``"111.017"^^xsd:double``, an object-valued categorical as an
-``rr:IRI`` term — using :func:`causalkg.vocab.value_datatype` and the *fitted*
-dtype of the column. ``store_query`` below does not: every ``ckg:predictedValue``
-and ``ckg:hasValue`` it writes is a plain literal, so ``211.24`` exported from
+``rr:IRI`` term — using :func:`causalway.vocab.value_datatype` and the *fitted*
+dtype of the column. ``store_query`` below does not: every ``cw:predictedValue``
+and ``cw:hasValue`` it writes is a plain literal, so ``211.24`` exported from
 here is a string and cannot be compared, aggregated or filtered numerically by
 any consumer of the RDF.
 
@@ -22,7 +22,7 @@ fitted model's manifest, and the query log deliberately does not depend on a
 model (``load_queries``/``replay`` work against a graph alone). Threading dtypes
 in would either add a required argument to a function several callers already
 use, or have this module guess a datatype from the value's *text*, which is the
-one thing :func:`~causalkg.vocab.value_datatype` is careful not to do for
+one thing :func:`~causalway.vocab.value_datatype` is careful not to do for
 categorical columns: a discretised ``age`` whose levels are ``"1"``/``"2"``/``"3"``
 would silently become ``xsd:integer`` and acquire an ordering the model does not
 have.
@@ -47,7 +47,7 @@ from rdflib import Graph, Literal, RDF, RDFS, URIRef, XSD
 from .bgp import Materialization
 from .entities import rows_for_entity
 from .result import OntologicalCausalGraph
-from .vocab import ANSWER_STEM, CKG, CONDITION_STEM, INTERVENTION_STEM, PROV, QUERY_STEM
+from .vocab import ANSWER_STEM, CW, CONDITION_STEM, INTERVENTION_STEM, PROV, QUERY_STEM
 
 __all__ = [
     "Intervention", "Condition", "Query", "Answer",
@@ -238,14 +238,14 @@ def validate_query(query: Query, ocg: OntologicalCausalGraph,
 # RDF export (§6.3-6.4, worked examples in §6.7)
 # ---------------------------------------------------------------------- #
 _QUERY_CLASS = {
-    "conditional": CKG.ConditionalQuery,
-    "interventional": CKG.InterventionalQuery,
-    "counterfactual": CKG.CounterfactualQuery,
+    "conditional": CW.ConditionalQuery,
+    "interventional": CW.InterventionalQuery,
+    "counterfactual": CW.CounterfactualQuery,
 }
 _ESTIMATE_CLASS = {
-    "conditional": CKG.ConditionalEstimate,
-    "interventional": CKG.InterventionalEstimate,
-    "counterfactual": CKG.CounterfactualEstimate,
+    "conditional": CW.ConditionalEstimate,
+    "interventional": CW.InterventionalEstimate,
+    "counterfactual": CW.CounterfactualEstimate,
 }
 
 
@@ -254,74 +254,42 @@ def _node_iri_and_prop(ocg: OntologicalCausalGraph, name: str):
     return ocg.node_iri(idx), ocg.nodes[idx].prop, ocg.nodes[idx].range_
 
 
-def _describe_node(g: Graph, ocg: OntologicalCausalGraph, name: str) -> URIRef:
-    """Add the minimal ``ckg:PropertyNode`` triples so this graph is self-describing.
-
-    ``store_query`` only references node IRIs; it does not require the full
-    ``OntologicalCausalGraph.to_rdf()`` output to already be merged into the
-    same store. Without at least ``rdfs:label``, :func:`load_queries` could
-    not recover the SCM column name (``ckg:PropertyNode`` IRIs carry no
-    human-readable name otherwise) — this is a strict subset of what
-    ``to_rdf()`` writes, so merging both into one graph adds no contradiction.
-    """
-    idx = _node_index(ocg, name)
-    node_iri = ocg.node_iri(idx)
-    if (node_iri, RDF.type, CKG.PropertyNode) not in g:
-        node = ocg.nodes[idx]
-        g.add((node_iri, RDF.type, CKG.PropertyNode))
-        g.add((node_iri, RDFS.label, Literal(node.name)))
-        g.add((node_iri, CKG.domain, node.domain))
-        g.add((node_iri, CKG["property"], node.prop))
-        g.add((node_iri, CKG.nodeKind, Literal(node.kind)))
-    return node_iri
-
-
-def _add_intervention(g: Graph, iv: Intervention, ocg: OntologicalCausalGraph) -> URIRef:
-    iri = intervention_iri(iv)
-    node_iri = _describe_node(g, ocg, iv.node)
-    _, prop, _ = _node_iri_and_prop(ocg, iv.node)
-    g.add((iri, RDF.type, CKG.Intervention))
-    g.add((iri, CKG.onNode, node_iri))
-    g.add((iri, CKG.onProperty, prop))
-    if iv.entity:
-        g.add((iri, CKG.onEntity, URIRef(iv.entity)))
-    if iv.expression is not None:
-        g.add((iri, CKG.setExpression, Literal(iv.expression)))
-    else:
-        g.add((iri, CKG.setValue, Literal(iv.value)))
-    return iri
-
-
-def _add_condition(g: Graph, c: Condition, ocg: OntologicalCausalGraph) -> URIRef:
-    iri = condition_iri(c)
-    node_iri = _describe_node(g, ocg, c.node)
-    _, prop, _ = _node_iri_and_prop(ocg, c.node)
-    g.add((iri, RDF.type, CKG.Condition))
-    g.add((iri, CKG.onNode, node_iri))
-    g.add((iri, CKG.onProperty, prop))
-    g.add((iri, CKG.observedValue, Literal(c.value)))
-    return iri
+# The three helpers that used to live here — `_describe_node`,
+# `_add_intervention`, `_add_condition` — wrote the query's triples by hand.
+# They are gone: `query_mapping.rml.ttl` writes those triples now, and keeping a
+# second implementation of the same shape is exactly how the two drift apart.
+# `tests/test_query_rml_export.py` pins the equivalence that retired them.
 
 
 def store_query(answer: Answer, query: Query, model, *,
                 graph: Optional[Graph] = None, merge: str = "annotation") -> Graph:
     """Serialise ``query`` (Layer B) and ``answer`` (Layer C) into ``graph``.
 
-    ``model`` is the fitted :class:`~causalkg.model.CausalModel` that
-    answered the query (used for ``ckg:usedModel`` and to resolve node IRIs
+    ``model`` is the fitted :class:`~causalway.model.CausalModel` that
+    answered the query (used for ``cw:usedModel`` and to resolve node IRIs
     via ``model.spec.ocg``).
 
     ``merge``:
 
     * ``"annotation"`` (default) — the query/intervention/condition/estimate
-      resources as plain triples, plus ``entity ckg:hasQuery queryIri`` for
+      resources as plain triples, plus ``entity cw:hasQuery queryIri`` for
       entity-first navigation. Adds no ``entity predicate value`` triple, so
       merging into the source KG contradicts nothing (§6.1).
     * ``"named-graph"`` — additionally projects the target node (and every
       descendant of an intervened node) as materialised triples inside
       ``GRAPH <queryIri> { ... }`` (§6.8; needs a quad store, not plain
       ``.ttl``).
+
+    The annotation triples are **not** written here any more: this function is
+    now a thin wrapper over :func:`causalway.query_export.queries_to_rdf`, which
+    hands ``query_mapping.rml.ttl`` to SDM-RDFizer like every other export in
+    the project.  What stays behind is the one thing that is not an export
+    shape — the ``"named-graph"`` projection, which deliberately asserts
+    ``entity property value`` quads and so cannot travel through a mapping
+    whose whole contract is that it never does.
     """
+    if merge not in ("annotation", "named-graph"):
+        raise ValueError(f"Unknown merge mode: {merge!r}")
     if graph is not None:
         g = graph
     elif merge == "named-graph":
@@ -334,54 +302,19 @@ def store_query(answer: Answer, query: Query, model, *,
             "store_query(merge='named-graph') needs a quad-capable graph "
             "(rdflib.Dataset / ConjunctiveGraph), not a plain rdflib.Graph."
         )
-    g.bind("ckg", CKG)
-    g.bind("prov", PROV)
-    ocg = model.spec.ocg
-    if ocg is None:
+    if model.spec.ocg is None:
         raise ValueError("store_query: model.spec.ocg is unavailable (a loaded model needs "
                          "its OntologicalCausalGraph passed separately — see CausalModel.load).")
 
-    q_iri, a_iri = query_iri(query), answer_iri(query)
+    # Imported here, not at module scope: `query_export` imports this module for
+    # the dataclasses and the IRI minting, so the dependency only runs one way
+    # at import time.
+    from .query_export import queries_to_rdf
 
-    g.add((q_iri, RDF.type, _QUERY_CLASS[query.kind]))
-    if query.label:
-        g.add((q_iri, RDFS.label, Literal(query.label)))
-    g.add((q_iri, CKG.usedModel, model.iri))
-    if query.entity:
-        g.add((q_iri, CKG.aboutEntity, URIRef(query.entity)))
-        g.add((URIRef(query.entity), CKG.hasQuery, q_iri))
-    for t in query.target:
-        node_iri = _describe_node(g, ocg, t)
-        _, prop, _ = _node_iri_and_prop(ocg, t)
-        g.add((q_iri, CKG.targetNode, node_iri))
-        g.add((q_iri, CKG.targetProperty, prop))
-    for iv in query.interventions:
-        g.add((q_iri, CKG.hasIntervention, _add_intervention(g, iv, ocg)))
-    for iv in query.reference:
-        g.add((q_iri, CKG.referenceIntervention, _add_intervention(g, iv, ocg)))
-    for c in query.evidence:
-        g.add((q_iri, CKG.hasEvidence, _add_condition(g, c, ocg)))
-    for c in query.condition_on:
-        g.add((q_iri, CKG.hasCondition, _add_condition(g, c, ocg)))
-    computed_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    g.add((q_iri, CKG.computedAt, Literal(computed_at, datatype=XSD.dateTime)))
-
-    node_iri, prop, range_ = _node_iri_and_prop(ocg, query.target[0])
-    g.add((a_iri, RDF.type, _ESTIMATE_CLASS[query.kind]))
-    g.add((a_iri, CKG.forQuery, q_iri))
-    g.add((a_iri, CKG.onNode, node_iri))
-    g.add((a_iri, CKG.onProperty, prop))
-    if query.entity:
-        g.add((a_iri, CKG.onEntity, URIRef(query.entity)))
-    g.add((a_iri, CKG.predictedValue, _predicted_literal(answer.predicted, range_)))
-    if answer.effect is not None:
-        g.add((a_iri, CKG.causalEffect, Literal(json.dumps(answer.effect)
-              if isinstance(answer.effect, dict) else answer.effect)))
+    queries_to_rdf([(query, answer)], model, graph=g)
 
     if merge == "named-graph":
-        _project_named_graph(g, q_iri, answer, query, model)
-    elif merge != "annotation":
-        raise ValueError(f"Unknown merge mode: {merge!r}")
+        _project_named_graph(g, query_iri(query), answer, query, model)
 
     return g
 
@@ -402,7 +335,7 @@ def _project_named_graph(g: Graph, q_iri: URIRef, answer: Answer, query: Query, 
     intervened node, not just the target — which would need a value for each
     of them. ``Answer`` only carries a value for the target node, so this
     implementation projects the target only; extending it to every
-    descendant needs the engines in :mod:`causalkg.inference` to return a
+    descendant needs the engines in :mod:`causalway.inference` to return a
     full-row prediction, not just the target's.
     """
     if not query.entity:
@@ -419,7 +352,7 @@ def _project_named_graph(g: Graph, q_iri: URIRef, answer: Answer, query: Query, 
 def load_queries(source, model=None) -> list:
     """Reconstruct executable :class:`Query` objects from a KG.
 
-    ``source`` is anything :func:`causalkg.sources.resolve_graph` accepts.
+    ``source`` is anything :func:`causalway.sources.resolve_graph` accepts.
     """
     from .sources import resolve_graph
     g = resolve_graph(source)
@@ -430,14 +363,14 @@ def load_queries(source, model=None) -> list:
         if cls not in kind_of:
             continue
         kind = kind_of[cls]
-        used_model = g.value(q_iri, CKG.usedModel)
+        used_model = g.value(q_iri, CW.usedModel)
         model_id = str(used_model).rsplit("/", 1)[-1] if used_model else None
-        entity = g.value(q_iri, CKG.aboutEntity)
-        target = [_local_node_name(g, n) for n in g.objects(q_iri, CKG.targetNode)]
-        interventions = [_read_intervention(g, iv) for iv in g.objects(q_iri, CKG.hasIntervention)]
-        reference = [_read_intervention(g, iv) for iv in g.objects(q_iri, CKG.referenceIntervention)]
-        evidence = [_read_condition(g, c) for c in g.objects(q_iri, CKG.hasEvidence)]
-        condition_on = [_read_condition(g, c) for c in g.objects(q_iri, CKG.hasCondition)]
+        entity = g.value(q_iri, CW.aboutEntity)
+        target = [_local_node_name(g, n) for n in g.objects(q_iri, CW.targetNode)]
+        interventions = [_read_intervention(g, iv) for iv in g.objects(q_iri, CW.hasIntervention)]
+        reference = [_read_intervention(g, iv) for iv in g.objects(q_iri, CW.referenceIntervention)]
+        evidence = [_read_condition(g, c) for c in g.objects(q_iri, CW.hasEvidence)]
+        condition_on = [_read_condition(g, c) for c in g.objects(q_iri, CW.hasCondition)]
         qid = str(q_iri).rsplit("/", 1)[-1]
         out.append(Query(
             kind=kind, model_id=model_id, target=target,
@@ -454,10 +387,10 @@ def _local_node_name(g: Graph, node_iri: URIRef) -> str:
 
 
 def _read_intervention(g: Graph, iri: URIRef) -> Intervention:
-    node = _local_node_name(g, g.value(iri, CKG.onNode))
-    entity = g.value(iri, CKG.onEntity)
-    expr = g.value(iri, CKG.setExpression)
-    val = g.value(iri, CKG.setValue)
+    node = _local_node_name(g, g.value(iri, CW.onNode))
+    entity = g.value(iri, CW.onEntity)
+    expr = g.value(iri, CW.setExpression)
+    val = g.value(iri, CW.setValue)
     return Intervention(
         node=node, value=None if val is None else val.toPython(),
         expression=str(expr) if expr is not None else None,
@@ -466,8 +399,8 @@ def _read_intervention(g: Graph, iri: URIRef) -> Intervention:
 
 
 def _read_condition(g: Graph, iri: URIRef) -> Condition:
-    node = _local_node_name(g, g.value(iri, CKG.onNode))
-    val = g.value(iri, CKG.observedValue)
+    node = _local_node_name(g, g.value(iri, CW.onNode))
+    val = g.value(iri, CW.observedValue)
     return Condition(node=node, value=None if val is None else val.toPython())
 
 
@@ -486,7 +419,7 @@ def replay(source, model) -> pd.DataFrame:
     for q in queries:
         q_iri = query_iri(q)
         a_iri = answer_iri(q)
-        stored = g_graph.value(a_iri, CKG.predictedValue)
+        stored = g_graph.value(a_iri, CW.predictedValue)
         stored_val = stored.toPython() if stored is not None else None
 
         if q.kind == "conditional":

@@ -1,4 +1,4 @@
-"""CausalKG web service — Plan 3, modules 1-5.
+"""CausalWay web service — Plan 3, modules 1-5.
 
 Ingest -> induced schema -> candidate node graph (curate) -> materialise ->
 discover -> curate a DAG -> fit an SCM -> condition/intervene -> counterfactual.
@@ -6,8 +6,8 @@ In-memory project store, synchronous processing (no Celery/Postgres/Redis) —
 deliberately minimal infra so the whole pipeline works end-to-end in a browser.
 See `Plan3 (web service).md` for the full target architecture this is a slice of.
 
-The heavy modelling imports (`causalkg.model`, `causalkg.inference`,
-`causalkg.evaluation`) pull in dowhy/pgmpy/sklearn and cost seconds of import
+The heavy modelling imports (`causalway.model`, `causalway.inference`,
+`causalway.evaluation`) pull in dowhy/pgmpy/sklearn and cost seconds of import
 time, so they are imported lazily inside the module 3-5 handlers: a user who
 only runs discovery never pays for them.
 """
@@ -45,16 +45,16 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from service.api import bundle  # noqa: E402
 
-from causalkg import bgp  # noqa: E402
-from causalkg.constraints import EdgeConstraint, render_label  # noqa: E402
-from causalkg.encoding import (  # noqa: E402
+from causalway import bgp  # noqa: E402
+from causalway.constraints import EdgeConstraint, render_label  # noqa: E402
+from causalway.encoding import (  # noqa: E402
     drop_constant_columns, to_discrete_frame, to_numeric_frame,
 )
-from causalkg.llm_meta import build_domain_str, build_pair_meta, build_var_meta  # noqa: E402
-from causalkg.nodes import PropertyNode, build_nodes  # noqa: E402
-from causalkg.ontology import OntologySchema  # noqa: E402
-from causalkg.result import OntologicalCausalGraph, vocabulary  # noqa: E402
-from causalkg.sources import resolve_schema  # noqa: E402
+from causalway.llm_meta import build_domain_str, build_pair_meta, build_var_meta  # noqa: E402
+from causalway.nodes import PropertyNode, build_nodes  # noqa: E402
+from causalway.ontology import OntologySchema  # noqa: E402
+from causalway.result import OntologicalCausalGraph, vocabulary  # noqa: E402
+from causalway.sources import resolve_schema  # noqa: E402
 from runners.run_kg_discovery import (  # noqa: E402
     ALLOWED_METHODS, CONTINUOUS, DiscoveryContext, run_algorithm, to_ocg,
 )
@@ -65,7 +65,7 @@ SAMPLES = {
     "sclc_patients": SAMPLE_DIR / "SCLC_patients.ttl",
 }
 
-app = FastAPI(title="CausalKG web service (Module 1 slice)")
+app = FastAPI(title="CausalWay web service (Module 1 slice)")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
@@ -208,6 +208,11 @@ def _node_by_name(p: ProjectState, name: str) -> PropertyNode:
 # encoding (Plan 1 D2), which `model.py` still uses when it re-materialises
 # from source (module 3), is a different code path with different semantics
 # and the exclusivity rule deliberately does not apply to it.
+#
+# W30 narrows the *default* without touching the rule: an object property whose
+# range class has no data properties starts at `variable`, because for that
+# property the relationship role joins in a class with nothing to contribute.
+# See `_seed_object_variables`.
 # --------------------------------------------------------------------------- #
 
 
@@ -230,9 +235,15 @@ def _set_schema(p: ProjectState, schema: OntologySchema, source_meta: dict,
     # relationship — which is both the natural reading of an object property and
     # what the ontology canvas draws by default. Opting one in as a variable is the
     # user's call (§3.5), and it costs the join.
+    #
+    # W30 is the one exception, and it is seeded here rather than left to the user:
+    # an object property whose *range class carries no data properties* is an
+    # attribute an ontologist chose to model as a class, and the relationship role
+    # is empty for it. See `_seed_object_variables`.
     p.nodes = build_nodes(schema, include_object_properties=True)
     p.excluded = {n.name for n in p.nodes if n.kind == "object"}
     p.excluded_joins = set()
+    _seed_object_variables(schema, p.nodes, p.excluded, p.excluded_joins)
     _invalidate_materialisation(p)
     p.layouts ={"ontology": {}, "causal": {}, "model": {}, "inference": {}, "counterfactual": {}}
     p.manual_edges = []
@@ -275,6 +286,45 @@ def _schema_components(schema: OntologySchema) -> list[set]:
     ug = schema.class_graph.to_undirected()
     ug.add_nodes_from(schema.classes)
     return [c for c in nx.connected_components(ug)]
+
+
+# --------------------------------------------------------------------------- #
+# W31 — the component is a choice, not a consequence
+#
+# One `materialize` call is one basic graph pattern over one connected component
+# of the class graph, and that part is not a limitation: Assumption 1 forbids
+# every edge between two classes with no relation path, so a cross-component
+# edge is inadmissible by construction and joining two components could only
+# manufacture a cross product.
+#
+# What *was* a limitation is that the component was never chosen. Every route
+# has always accepted `component=`, and nothing ever sent one — so the fallback
+# below ("whichever has the most retained nodes") was not a default, it was the
+# whole behaviour. On the bundled samples, which have one component each, that
+# is invisible, which is why it survived this long. On a real endpoint whose
+# T-Box holds seventy of them it means sixty-nine are unreachable through the
+# UI, with no way to even see what is in them.
+#
+# So the component list now carries enough to choose from — its classes, and
+# how many of its nodes are retained right now — and every node says which
+# component it is in, so a client can scope its curation list to the component
+# whose query it is showing. `component=None` keeps its old meaning exactly:
+# *auto*, which still follows the curation as the user changes it. Pinning one
+# is the user overriding that, the same relationship a pinned row limit has to
+# "no limit".
+# --------------------------------------------------------------------------- #
+def _auto_component_index(nodes: list[PropertyNode], excluded: set[str],
+                          components: list[set]) -> Optional[int]:
+    """What `component=None` resolves to: most retained nodes, ties to the lowest index.
+
+    `None` when there is nothing to resolve — no components, or every node
+    excluded — which is the same condition `_resolve_component` rejects.
+    """
+    retained = [n for n in nodes if n.name not in excluded]
+    if not components or not retained:
+        return None
+    counts = [sum(1 for n in retained if n.domain in c) for c in components]
+    return max(range(len(components)), key=lambda i: counts[i])
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -360,7 +410,7 @@ TYPE_OPTIONS_NOTE = "max_levels applies to integer columns only; floats are alwa
 # outside, so cancelling marks the job abandoned and *discards its result* — the UI
 # returns immediately, but the query keeps consuming CPU until it finishes on its
 # own. Making that genuinely interruptible means a cancel check inside
-# `causalkg/bgp.py`'s row loop, which is an engine change and a separate decision.
+# `causalway/bgp.py`'s row loop, which is an engine change and a separate decision.
 # --------------------------------------------------------------------------- #
 MATERIALISE_JOB_NOTE = (
     "Cancelling abandons the result; the underlying rdflib join keeps running to "
@@ -513,6 +563,18 @@ def get_nodes(pid: str):
     # options come from `bgp` rather than being recomputed here, so the card's
     # disabled state and the materialiser's refusal cannot disagree.
     role_options = bgp.join_role_options(schema, p.nodes, p.excluded, p.excluded_joins)
+    # W30: which object properties point at a class that has no data properties.
+    # Recomputed from the node set rather than remembered from `_set_schema`,
+    # because it is a fact about the *schema* and never about the curation — it
+    # stays true (and stays worth showing) after the user overrides the role.
+    auto_variable = _auto_variable_names(p.nodes)
+    # W31: which connected component each class — and so each node — belongs to.
+    # A node's component is its *domain*'s, because `n.domain in components[i]`
+    # is the exact test `_component_all_nodes` uses to draw a component's join
+    # from: a node the client lists under component i is a node the query for
+    # component i will contain, with no second rule to drift out of step.
+    components = _schema_components(schema)
+    class_component = {c: i for i, comp in enumerate(components) for c in comp}
 
     nodes_payload = []
     for n in p.nodes:
@@ -532,6 +594,16 @@ def get_nodes(pid: str):
             # `None` for a data property, which has no role to choose.
             "role": role_options.get(n.name, {}).get("role"),
             "role_options": role_options.get(n.name),
+            # W30: the range class declares no data properties, so joining it
+            # contributes no columns and the only thing it can say is which
+            # instance was pointed at — an attribute modelled as a class. These
+            # start in the `variable` role instead of `relationship`.
+            "auto_variable": n.name in auto_variable,
+            # W31: `_schema_components` seeds its graph with every class, so this
+            # is a total map and the `None` branch is unreachable for a node this
+            # schema produced. If it ever were `None` it would be the truth: a
+            # node whose domain is in no component is one no join can reach.
+            "component": class_component.get(n.domain),
             # W11: the card's second line reads "<range> · <n> distinct" once a materialisation
             # has supplied a count; None until then, and the card shows the range alone.
             "n_distinct": p.distinct_counts.get(n.name),
@@ -588,10 +660,27 @@ def get_nodes(pid: str):
             "note": TYPE_OPTIONS_NOTE,
         },
         "dtypes": dtypes,
+        # W31: enough per component to pick one. An index alone is not a choice a
+        # human can make among seventy of them — the class names are what say
+        # which part of the ontology this is, and `n_retained` is what says
+        # whether `materialise` would accept it (zero is the one case it refuses
+        # outright), so the picker can report that before it is chosen.
         "components": [
-            {"index": i, "n_classes": len(c), "n_nodes": sum(1 for nd in p.nodes if nd.domain in c)}
-            for i, c in enumerate(_schema_components(schema))
+            {
+                "index": i,
+                "n_classes": len(c),
+                "n_nodes": sum(1 for nd in p.nodes if nd.domain in c),
+                "n_retained": sum(1 for nd in p.nodes
+                                  if nd.domain in c and nd.name not in p.excluded),
+                "classes": sorted(
+                    schema.labels.get(cl, str(cl).split("/")[-1].split("#")[-1]) for cl in c
+                ),
+            }
+            for i, c in enumerate(components)
         ],
+        # What `component=None` means at this curation, so the client can show
+        # the auto choice rather than re-deriving the rule and disagreeing.
+        "auto_component": _auto_component_index(p.nodes, p.excluded, components),
     }
 
 
@@ -630,6 +719,84 @@ def _apply_object_roles(nodes: list[PropertyNode], excluded: set[str],
     return excluded, excluded_joins
 
 
+def _value_only_ranges(nodes: list[PropertyNode]) -> set:
+    """Class IRIs that no *data* property node is declared on.
+
+    A class with no literal attributes of its own cannot contribute a single
+    column to the flat join, so joining it buys nothing: the only thing such a
+    class can tell the analysis is *which* of its instances an entity points at.
+    Computed from `nodes` rather than from `schema.data_properties` so it uses
+    exactly the candidate-node set the rest of module 1 curates — a class whose
+    only data property was dropped during schema induction is value-only here
+    too, which is the truthful answer for the join.
+    """
+    data_bearing = {n.domain for n in nodes if n.kind == "data"}
+    return {n.range_ for n in nodes if n.kind == "object"} - data_bearing
+
+
+def _auto_variable_names(nodes: list[PropertyNode]) -> set[str]:
+    """Object properties that W30 seeds into the `variable` role (see below)."""
+    value_only = _value_only_ranges(nodes)
+    return {n.name for n in nodes if n.kind == "object" and n.range_ in value_only}
+
+
+# --------------------------------------------------------------------------- #
+# W30 — an object property pointing at a class that has no data properties
+#       starts as a *causal variable*, not as a relationship.
+#
+# W26 made `relationship` the default for every object property, which is the
+# right reading when the range class is a real entity with attributes of its
+# own: joining Therapy into a Patient row brings Therapy's columns with it.
+# It is the wrong reading — and silently loses the variable — when the range
+# class is an *attribute modelled as a class*. Ontologists do this constantly:
+# an age band, a tumour stage, a severity level become `:Age`, `:Stage`,
+# `:Severity`, instances `:young`/`:middle`/`:old`, and `:p :hasAge :young`.
+# Such a class declares no data properties at all, so the relationship role
+# joins in a class that contributes no columns, and the one fact the KG was
+# expressing — which band this patient is in — reaches the analysis table
+# nowhere. The user then has to find every such property by hand and flip it,
+# on a curation screen that gives no hint which ones they are.
+#
+# Seeded, not forced: this only sets the starting curation. The three-way role
+# selector still moves any of them back, and `PUT /nodes` is unchanged.
+#
+# Applied one at a time, each verified against the accumulated state, because
+# the variable role drops a join and several dropped joins can split the query
+# into a cross product (W26 (b)). A flip that would do that is reverted and the
+# property is left as a relationship — the same verdict `_reject_role_conflicts`
+# would give, from the same function, so a seeded curation is never one the
+# server would refuse if the user typed it in. Candidates are taken in name
+# order so the seed is reproducible for a given schema.
+# --------------------------------------------------------------------------- #
+def _seed_object_variables(schema, nodes: list[PropertyNode], excluded: set[str],
+                           excluded_joins: set[str]) -> list[str]:
+    """Flip the W30 candidates into the `variable` role, in place. Returns them."""
+    by_name = {n.name: n for n in nodes}
+    flipped: list[str] = []
+    for name in sorted(_auto_variable_names(nodes)):
+        if name not in by_name:
+            continue
+        excluded.discard(name)
+        excluded_joins.add(name)
+        if _variable_role_conflicts(schema, nodes, excluded, excluded_joins):
+            excluded.add(name)
+            excluded_joins.discard(name)
+            continue
+        flipped.append(name)
+    return flipped
+
+
+def _variable_role_conflicts(schema, nodes: list[PropertyNode], excluded: set[str],
+                             excluded_joins: set[str]) -> list[tuple[str, str]]:
+    """`(name, reason)` for every node sitting at `variable` that cannot be one."""
+    return [
+        (name, opt["reason"])
+        for name, opt in bgp.join_role_options(
+            schema, nodes, excluded, excluded_joins).items()
+        if opt["role"] == "variable" and not opt["can_be_variable"]
+    ]
+
+
 def _reject_role_conflicts(p: ProjectState, excluded: set[str],
                            excluded_joins: set[str]) -> None:
     """Refuse a curation whose *variable* roles are what split the query.
@@ -647,12 +814,7 @@ def _reject_role_conflicts(p: ProjectState, excluded: set[str],
     how a user narrows a join deliberately. Taking that away here would break a
     working feature to enforce a rule about a different one.
     """
-    conflicts = [
-        (name, opt["reason"])
-        for name, opt in bgp.join_role_options(
-            p.schema, p.nodes, excluded, excluded_joins).items()
-        if opt["role"] == "variable" and not opt["can_be_variable"]
-    ]
+    conflicts = _variable_role_conflicts(p.schema, p.nodes, excluded, excluded_joins)
     if conflicts:
         raise HTTPException(400, " ".join(reason for _, reason in conflicts))
 
@@ -728,7 +890,7 @@ def _frame_dtypes(p: ProjectState) -> dict[str, str]:
     """
     if p.last_materialization is None:
         return {}
-    from causalkg.model import _infer_dtype  # noqa: PLC0415 — cheap, no dowhy import
+    from causalway.model import _infer_dtype  # noqa: PLC0415 — cheap, no dowhy import
 
     opts = p.type_options
     out: dict[str, str] = {}
@@ -752,9 +914,8 @@ def _resolve_component(p: ProjectState, schema: OntologySchema,
     components = _schema_components(schema)
     comp_idx = component
     if comp_idx is None:
-        # auto: the component with the most retained nodes
-        counts = [sum(1 for n in retained if n.domain in c) for c in components]
-        comp_idx = max(range(len(components)), key=lambda i: counts[i]) if components else 0
+        auto = _auto_component_index(p.nodes, p.excluded, components)
+        comp_idx = 0 if auto is None else auto
     if comp_idx < 0 or comp_idx >= len(components):
         raise HTTPException(400, f"No component {comp_idx}")
     comp_nodes = [n for n in retained if n.domain in components[comp_idx]]
@@ -1162,7 +1323,7 @@ def run_discovery(pid: str, body: DiscoveryRunRequest):
         raise HTTPException(400, f"Discovery run failed: {exc}") from exc
 
     # The seed goes into the OCG's parameters, not only into the run record
-    # below: a ckg:DiscoveryRun is a prov:Activity, and PC/GES tie-breaking,
+    # below: a cw:DiscoveryRun is a prov:Activity, and PC/GES tie-breaking,
     # NOTEARS/DAGMA/DAG-GNN initialisation and any bootstrap are all stochastic,
     # so a run whose exported provenance omits the seed cannot be reproduced from
     # the KG. `library` is the other half of that — the same seed under a
@@ -1541,10 +1702,10 @@ def get_curated_graph(pid: str):
 # quality of the *description* each variable carries. Three sources of description,
 # in increasing precedence:
 #
-#   1. the T-Box itself — rdfs:label / rdfs:comment, via causalkg.llm_meta. Free,
+#   1. the T-Box itself — rdfs:label / rdfs:comment, via causalway.llm_meta. Free,
 #      always available, and usually the best thing about a well-annotated KG.
 #   2. an external SPARQL endpoint (Wikidata by default) that some columns have been
-#      mapped onto by QID: causalkg.kg_endpoint_meta summarises each mapped entity's
+#      mapped onto by QID: causalway.kg_endpoint_meta summarises each mapped entity's
 #      1-hop neighbourhood and each mapped pair's relational path. Partial mapping is
 #      the normal case — unmapped columns just keep their T-Box text.
 #   3. text the user writes for a specific variable, which wins over both.
@@ -1728,7 +1889,7 @@ def estimate_project_priors(pid: str, body: PriorEstimate):
     entity_map = {k: v for k, v in p.prior_meta["entity_map"].items() if k in set(names)}
     if body.use_kg and entity_map:
         endpoint = p.prior_meta["endpoint"]
-        from causalkg.kg_endpoint_meta import (  # noqa: PLC0415
+        from causalway.kg_endpoint_meta import (  # noqa: PLC0415
             WIKIDATA_ENDPOINT, build_pair_meta_from_kg, build_var_meta_from_kg,
         )
         endpoint = endpoint or WIKIDATA_ENDPOINT
@@ -1996,7 +2157,7 @@ def _model_payload(p: ProjectState) -> dict:
         elif col in manifest_ranges:
             ranges[col] = {k: _py(v) for k, v in manifest_ranges[col].items()}
 
-    from causalkg.inference import _all_discrete  # noqa: PLC0415 — one private probe, deliberate
+    from causalway.inference import _all_discrete  # noqa: PLC0415 — one private probe, deliberate
 
     return {
         "model_id": model.model_id,
@@ -2080,7 +2241,7 @@ def fit_model(pid: str, body: FitRequest):
     if p.model is not None and p.model_key == key:
         return p.model_info
 
-    from causalkg.model import CausalModel  # noqa: PLC0415 — pulls dowhy/pgmpy, ~seconds
+    from causalway.model import CausalModel  # noqa: PLC0415 — pulls dowhy/pgmpy, ~seconds
 
     ocg = _curated_ocg(p)
     started = time.time()
@@ -2293,7 +2454,7 @@ def evaluate(pid: str, body: EvaluateRequest):
     rows: list[dict] = []
     cv_error = None
     if p.model_kind == "scm":
-        from causalkg.evaluation import held_out_cv  # noqa: PLC0415
+        from causalway.evaluation import held_out_cv  # noqa: PLC0415
         try:
             cv = held_out_cv(model, n_splits=max(2, body.cv_splits),
                              random_state=body.random_state)
@@ -2318,7 +2479,7 @@ def evaluate(pid: str, body: EvaluateRequest):
     }
     if body.falsify:
         try:
-            from causalkg.evaluation import falsify  # noqa: PLC0415
+            from causalway.evaluation import falsify  # noqa: PLC0415
             result = falsify(model)
             structure["falsification"] = {
                 "summary": str(result),
@@ -2334,7 +2495,7 @@ def evaluate(pid: str, body: EvaluateRequest):
     gcm_summary = None
     pnl = None
     if body.gcm and p.model_kind == "scm":
-        from causalkg.evaluation import evaluate_model  # noqa: PLC0415
+        from causalway.evaluation import evaluate_model  # noqa: PLC0415
         try:
             result = evaluate_model(model)
             gcm_summary = str(result)
@@ -2695,7 +2856,7 @@ def infer_counterfactual(pid: str, body: CounterfactualRequest):
     # number with nothing to be counter to. Read it off the entity's own rows, which
     # `spec.mat.entity_ids` is the record of (hence the fit materialising the same
     # join module 1 did).
-    from causalkg.entities import aggregate, population_rows  # noqa: PLC0415
+    from causalway.entities import aggregate, population_rows  # noqa: PLC0415
 
     rows = population_rows(model.spec.mat, body.entity)
     for t in targets:
@@ -2903,7 +3064,7 @@ def _joint_samples(model, evidence: dict, interventions: dict, num_samples: int)
     """
     from dowhy.graph import is_root_node  # noqa: PLC0415
 
-    from causalkg.inference import _density_at  # noqa: PLC0415
+    from causalway.inference import _density_at  # noqa: PLC0415
 
     g = model.scm.graph
     samples: dict[str, np.ndarray] = {}
@@ -3183,7 +3344,7 @@ def infer_predict(pid: str, body: PredictRequest):
 #: per-call overhead (the thing that made the board slow) while the packed
 #: Gumbel noise — one small object array per row per categorical node — stays
 #: in the tens of megabytes even for an entity with hundreds of join rows.
-#: A deliberate second copy of `causalkg.inference.CF_BATCH_ROWS`: importing
+#: A deliberate second copy of `causalway.inference.CF_BATCH_ROWS`: importing
 #: that module here would be a top-level Plan 2 import and would charge every
 #: discovery-only user dowhy's ~30s import (CLAUDE.md §2). **Change one, change
 #: the other** — the two counterfactual paths are separate code (this one
@@ -3244,7 +3405,7 @@ def infer_counterfactual_predict(pid: str, body: CfPredictRequest):
     from dowhy import gcm  # noqa: PLC0415
     from dowhy.gcm._noise import compute_noise_from_data  # noqa: PLC0415
 
-    from causalkg.entities import aggregate, population_rows  # noqa: PLC0415
+    from causalway.entities import aggregate, population_rows  # noqa: PLC0415
 
     if (body.entity is None) == (body.observed is None):
         raise HTTPException(400, (
@@ -3367,7 +3528,7 @@ def infer_counterfactual_predict(pid: str, body: CfPredictRequest):
     # its own export.
     #
     # A hypothetical unit (W28) keeps `entity = None` all the way through, and
-    # `cf_export` turns that into a world with no `ckg:aboutEntity` and a
+    # `cf_export` turns that into a world with no `cw:aboutEntity` and a
     # content-hashed IRI. It has to stay None rather than becoming a placeholder
     # string: an invented IRI in an exported TTL is a claim about a resource
     # that does not exist, and merging it into the source KG would be a
@@ -3575,7 +3736,7 @@ def unit_factual(pid: str, entity: str):
     """One unit's actual observed values — what a counterfactual is counter to."""
     p = _get_project(pid)
     model = _require_model(p)
-    from causalkg.entities import aggregate, population_rows  # noqa: PLC0415
+    from causalway.entities import aggregate, population_rows  # noqa: PLC0415
 
     rows = population_rows(model.spec.mat, entity)
     if len(rows) == 0:
@@ -3646,6 +3807,25 @@ def list_answers(pid: str):
     return _get_project(pid).answers
 
 
+@app.get("/api/projects/{pid}/answers/{aid}/export")
+def export_answer(pid: str, aid: int, format: str = "ttl"):
+    """One logged answer on its own — `json`, `csv`, or cw: `ttl`.
+
+    The whole log is still `GET /export?what=answers`; this is the per-question
+    counterpart, because the interesting unit of module 3 is usually one
+    estimand rather than the session. Both go through the same `_render`, so the
+    single answer is a filter over the log rather than a second serialiser.
+    """
+    p = _get_project(pid)
+    payload, media_type, suffix = _render(p, "answers", format, [aid])
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    return Response(
+        payload, media_type=media_type,
+        headers={"Content-Disposition":
+                 f'attachment; filename="causalway-answer-{aid}-{stamp}.{suffix}"'},
+    )
+
+
 @app.delete("/api/projects/{pid}/answers")
 def clear_answers(pid: str):
     p = _get_project(pid)
@@ -3673,14 +3853,14 @@ def _ledger_frame(p: ProjectState) -> pd.DataFrame:
 
 
 def _curated_ocg(p: ProjectState) -> OntologicalCausalGraph:
-    """The curated selection as a ckg:OntologicalCausalGraph — what module 3 fits.
+    """The curated selection as a cw:OntologicalCausalGraph — what module 3 fits.
 
     This is the graph behind "Take n edges to inference": the edge set the user
     settled on, as a first-class OCG instance rather than a list of pairs. Two
     pieces of curation provenance ride along, because a curated graph that
     cannot say where its edges came from is not reproducible:
-    ``ckg:manuallyAdded`` marks the edges the analyst drew by hand, and
-    ``prov:wasDerivedFrom`` names the ``ckg:DiscoveryRun``s the rest were
+    ``cw:manuallyAdded`` marks the edges the analyst drew by hand, and
+    ``prov:wasDerivedFrom`` names the ``cw:DiscoveryRun``s the rest were
     selected out of.
     """
     ctx = p.discovery_context
@@ -3707,28 +3887,28 @@ def _curated_ocg(p: ProjectState) -> OntologicalCausalGraph:
 
 
 def _curated_turtle(p: ProjectState) -> str:
-    """Serialise the curated selection as a ckg: OntologicalCausalGraph."""
+    """Serialise the curated selection as a cw: OntologicalCausalGraph."""
     return _curated_ocg(p).to_rdf(with_vocabulary=True).serialize(format="turtle")
 
 
 # --------------------------------------------------------------------------- #
 # W27 — the vocabulary, served
 #
-# `http://sdm-causalkg.org/` does not dereference and this project does not
+# `http://sdm-causalway.org/` does not dereference and this project does not
 # control the domain, so a consumer of an exported TTL has no way to look up
-# what `ckg:predictedValue` means. Serving the ontology here is the honest
+# what `cw:predictedValue` means. Serving the ontology here is the honest
 # substitute: wherever this service is deployed, `GET /api/vocab` is a URL that
 # returns the term definitions.
 #
 # It is generated by `vocabulary()` on each request rather than read from
-# `causalkg/ontology.ttl`, so what the service serves is by construction what
+# `causalway/ontology.ttl`, so what the service serves is by construction what
 # the code means — a checked-in snapshot can go stale against `vocab.py` and
 # nothing would notice. The snapshot file exists for readers who have the repo
-# but not a running server; `python -m causalkg.vocab` regenerates it.
+# but not a running server; `python -m causalway.vocab` regenerates it.
 # --------------------------------------------------------------------------- #
 @app.get("/api/vocab")
 def get_vocab(format: str = "turtle"):
-    """The `ckg:` vocabulary — classes, properties, labels, comments, alignments."""
+    """The `cw:` vocabulary — classes, properties, labels, comments, alignments."""
     graph = vocabulary()
     if format in ("json", "json-ld", "jsonld"):
         return Response(graph.serialize(format="json-ld", indent=2),
@@ -3746,7 +3926,7 @@ def _run_ocg(p: ProjectState, run: dict) -> OntologicalCausalGraph:
 
     A run record keeps ``adj``/``weights``/``columns``, which is everything an
     OCG needs, so each run in the session is exportable as its own
-    ``ckg:OntologicalCausalGraph`` — with the seed that produced it. Node IRIs
+    ``cw:OntologicalCausalGraph`` — with the seed that produced it. Node IRIs
     are global, so several of these accumulate into one store and join on the
     shared node resources (this is what ``results/*/all_methods.ttl`` is).
     """
@@ -3839,7 +4019,7 @@ def _artifacts(p: ProjectState) -> dict[str, dict]:
         "learned_graphs": {
             "label": "Learned causal graphs", "formats": ["json", "turtle"],
             "available": bool(p.discovery_runs), "reason": "Run a discovery method.",
-            # Each selected run as its own ckg:OntologicalCausalGraph. Node IRIs
+            # Each selected run as its own cw:OntologicalCausalGraph. Node IRIs
             # are global, so several of them accumulate into one store and join
             # on the shared node resources.
             "select": [
@@ -3879,7 +4059,10 @@ def _artifacts(p: ProjectState) -> dict[str, dict]:
         },
         "answers": {
             "label": "Query log (conditional, interventional, counterfactual)",
-            "formats": ["json", "csv"],
+            # `ttl` needs the fitted model to resolve node IRIs, which `json`
+            # and `csv` do not — the flat log is self-contained, the RDF is not.
+            "formats": ["json", "csv", "ttl"] if p.model is not None
+                       else ["json", "csv"],
             "available": bool(p.answers), "reason": "Ask a question in module 3 or 4.",
         },
         "cf_worlds": {
@@ -3925,7 +4108,7 @@ def export_manifest(pid: str):
 
 
 def _cf_worlds_payload(p: ProjectState, fmt: str) -> tuple[bytes, str, str]:
-    """The session's counterfactual worlds, as JSON or as ckg: Turtle.
+    """The session's counterfactual worlds, as JSON or as cw: Turtle.
 
     The JSON is the very document the RML mapping reads, so the two formats are
     one artifact in two syntaxes rather than two hand-kept shapes.
@@ -3939,7 +4122,7 @@ def _cf_worlds_payload(p: ProjectState, fmt: str) -> tuple[bytes, str, str]:
     """
     if not p.cf_worlds:
         raise HTTPException(400, "No counterfactual worlds yet.")
-    from causalkg.cf_export import (  # noqa: PLC0415 — heavy Plan 2 import
+    from causalway.cf_export import (  # noqa: PLC0415 — heavy Plan 2 import
         CounterfactualWorld, worlds_to_json, worlds_to_rdf,
     )
 
@@ -3963,6 +4146,70 @@ def _cf_worlds_payload(p: ProjectState, fmt: str) -> tuple[bytes, str, str]:
     return (json.dumps(worlds_to_json(worlds, ocg, dtypes=dtypes),
                        indent=2, default=str).encode(),
             "application/json", "json")
+
+
+def _answers_turtle(p: ProjectState, records: list[dict]) -> tuple[bytes, str, str]:
+    """The module-3 query log as cw: Turtle, through `query_mapping.rml.ttl`.
+
+    The session log is a flat dict per answer; the export rebuilds the `Query`
+    and `Answer` it came from so the RDF is produced by the same mapping the
+    engine and the CLI use, rather than by a second shape maintained here.
+
+    One asymmetry is deliberate, and it is the vocabulary's, not this function's:
+    an entity attached to a *conditional* or *interventional* query is not the
+    query's subject — those are population-level questions — so it travels as
+    `cw:onEntity` on each intervention. Only a counterfactual has a
+    `cw:aboutEntity`, which is why `Query` refuses `entity=` for the other two.
+    """
+    if p.model is None:
+        raise HTTPException(400, "Fit a model before exporting answers as RDF.")
+    from causalway.queries import (  # noqa: PLC0415 — heavy Plan 2 import
+        Answer, Condition, Intervention, Query,
+    )
+    from causalway.query_export import queries_to_rdf
+
+    dtypes = (getattr(p.model, "manifest", None) or {}).get("dtypes")
+    pairs = []
+    for rec in records:
+        kind = rec.get("kind")
+        if kind not in ("conditional", "interventional", "counterfactual"):
+            continue
+        entity = rec.get("entity")
+        act_entity = entity if kind != "conditional" else None
+        query = Query(
+            kind=kind,
+            model_id=p.model.model_id or "unfitted",
+            target=[rec["target"]],
+            interventions=[
+                Intervention(node=k, value=v, entity=act_entity)
+                for k, v in (rec.get("interventions") or {}).items()
+            ],
+            reference=[
+                Intervention(node=k, value=v)
+                for k, v in (rec.get("reference") or {}).items()
+            ],
+            evidence=[
+                Condition(node=k, value=v)
+                for k, v in (rec.get("evidence") or {}).items()
+            ],
+            condition_on=[
+                Condition(node=k, value=v)
+                for k, v in (rec.get("conditions") or {}).items()
+            ],
+            entity=entity if kind == "counterfactual" else None,
+            label=rec.get("estimand"),
+        )
+        answer = Answer(
+            kind=kind, target=rec["target"], entity=entity,
+            predicted=rec.get("predicted"), effect=rec.get("effect"),
+            factual=rec.get("factual"), coupling=rec.get("coupling"),
+        )
+        pairs.append((query, answer))
+    if not pairs:
+        raise HTTPException(400, "None of those answers carry a replayable query.")
+
+    graph = queries_to_rdf(pairs, p.model, dtypes=dtypes, with_vocabulary=True)
+    return graph.serialize(format="turtle").encode(), "text/turtle", "ttl"
 
 
 def _render(p: ProjectState, what: str, fmt: str,
@@ -4002,7 +4249,7 @@ def _render(p: ProjectState, what: str, fmt: str,
             return _ledger_frame(p).to_csv(index=False).encode(), "text/csv", "csv"
         return as_json(_ledger(p))
     if what == "graph":
-        # JSON and Turtle are the same ckg:OntologicalCausalGraph in two
+        # JSON and Turtle are the same cw:OntologicalCausalGraph in two
         # syntaxes — the JSON is the document the RML mapping reads. (The UI's
         # own board shape stays available at GET /graph.)
         if fmt == "turtle":
@@ -4056,14 +4303,24 @@ def _render(p: ProjectState, what: str, fmt: str,
     if what == "answers":
         if not p.answers:
             raise HTTPException(400, "No answers yet.")
+        records = p.answers
+        if select:
+            wanted = set(select)
+            records = [a for a in p.answers if a.get("answer_id") in wanted]
+            if not records:
+                raise HTTPException(
+                    404, f"No answer with id in {sorted(wanted)}; the log keeps the "
+                         "last 50 of a session and is lost on restart.")
         if fmt == "csv":
             flat = [
                 {k: (json.dumps(v, default=str) if isinstance(v, (dict, list)) else v)
                  for k, v in a.items()}
-                for a in p.answers
+                for a in records
             ]
             return pd.DataFrame(flat).to_csv(index=False).encode(), "text/csv", "csv"
-        return as_json(p.answers)
+        if fmt in ("ttl", "turtle"):
+            return _answers_turtle(p, records)
+        return as_json(records)
     if what == "layout":
         return as_json(p.layouts)
     raise HTTPException(400, f"Unknown artifact '{what}'.")
@@ -4152,7 +4409,7 @@ def export(pid: str, what: str = "project", format: str = "json",
                 indent=2, default=str))
 
             z.writestr("README.txt",
-                       "CausalKG project export.\n"
+                       "CausalWay project export.\n"
                        "This service keeps no persistent user data (Plan 3 W14); this archive is\n"
                        "the only durable copy of the session. Re-import it with the Import\n"
                        "button, or POST it to /api/projects/import — that always creates a NEW\n"
@@ -4167,13 +4424,13 @@ def export(pid: str, what: str = "project", format: str = "json",
                        "through runners/.\n")
         return Response(
             buf.getvalue(), media_type="application/zip",
-            headers={"Content-Disposition": f'attachment; filename="causalkg-{p.id}-{stamp}.zip"'},
+            headers={"Content-Disposition": f'attachment; filename="causalway-{p.id}-{stamp}.zip"'},
         )
 
     payload, media_type, suffix = _render(p, what, format, select)
     return Response(
         payload, media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="causalkg-{what}-{stamp}.{suffix}"'},
+        headers={"Content-Disposition": f'attachment; filename="causalway-{what}-{stamp}.{suffix}"'},
     )
 
 
@@ -4204,7 +4461,7 @@ def _library_versions() -> dict:
 
 def _load_bundled_model(loaded, strict: bool):
     """`model/` -> a live `CausalModel`, or `None` plus an explanation."""
-    from causalkg.model import CausalModel  # noqa: PLC0415 — heavy Plan 2 import
+    from causalway.model import CausalModel  # noqa: PLC0415 — heavy Plan 2 import
 
     with tempfile.TemporaryDirectory() as tmp:
         directory = bundle.write_model_dir(loaded, os.path.join(tmp, "model"))
@@ -4285,7 +4542,7 @@ async def reattach_source(pid: str, file: UploadFile = File(...), force: bool = 
         raise HTTPException(409, str(exc)) from exc
 
     suffix = Path(file.filename or "source.ttl").suffix or ".ttl"
-    handle, path = tempfile.mkstemp(suffix=suffix, prefix="causalkg-src-")
+    handle, path = tempfile.mkstemp(suffix=suffix, prefix="causalway-src-")
     with os.fdopen(handle, "wb") as fh:
         fh.write(data)
 
@@ -4411,7 +4668,7 @@ else:
     @app.get("/")
     def _no_build():
         return Response(
-            "<h1>CausalKG</h1><p>The frontend is not built yet. Run "
+            "<h1>CausalWay</h1><p>The frontend is not built yet. Run "
             "<code>npm install &amp;&amp; npm run build</code> in <code>web/</code>, "
             "or <code>npm run dev</code> for the dev server on port 5173.</p>",
             media_type="text/html",

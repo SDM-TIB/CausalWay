@@ -1,5 +1,6 @@
 import { useStore } from '../../stores/useStore'
 import { Badge, Button, Icon, Note, Panel } from '../../app/ui'
+import { api } from '../../api/client'
 import type { AnswerKind } from '../../api/client'
 
 const BACKEND_NOTE: Record<string, string> = {
@@ -89,14 +90,27 @@ export function BackendNote({
  * *answer*; this carries the history of asking.
  */
 export function AnswerLogPanel({ kinds }: { kinds?: AnswerKind[] }) {
-  const { answers, clearAnswers, projectId } = useStore()
+  const { answers, clearAnswers, projectId, model } = useStore()
   const mine = kinds ? answers.filter((a) => kinds.includes(a.kind)) : answers
+  // RDF needs the fitted model to resolve node IRIs; CSV does not. Offering a
+  // ttl link that can only 400 would be worse than not offering it.
+  const canRdf = Boolean(projectId && model)
   return (
     <Panel
       title="Query log"
       right={
         <div className="flex items-center gap-1.5">
           <Badge tone="muted">{mine.length}</Badge>
+          {answers.length > 0 && projectId && canRdf && (
+            <a
+              href={api.exportUrl(projectId, 'answers', 'ttl')}
+              download
+              title="Export the whole log as cw: RDF — each query with its interventions, its observational conditions and its estimate"
+              className="rounded-md border border-line px-1.5 py-[2px] font-mono text-[10px] uppercase text-muted transition-colors hover:border-indigo/50 hover:bg-indigo/10 hover:text-indigo"
+            >
+              ttl
+            </a>
+          )}
           {answers.length > 0 && projectId && (
             <a
               href={`/api/projects/${projectId}/export?what=answers&format=csv`}
@@ -123,12 +137,22 @@ export function AnswerLogPanel({ kinds }: { kinds?: AnswerKind[] }) {
       )}
       <ul className="-mx-1 max-h-[34vh] overflow-y-auto">
         {[...mine].reverse().map((a) => (
-          <li key={a.answer_id} className="rounded-lg px-1.5 py-1 hover:bg-surface2">
+          <li key={a.answer_id} className="group rounded-lg px-1.5 py-1 hover:bg-surface2">
             <div className="flex items-baseline gap-1.5">
               <span className="font-mono text-[10px] text-faint">#{a.answer_id}</span>
               <span className="min-w-0 flex-1 truncate text-[11px]" title={a.estimand}>
                 {a.estimand}
               </span>
+              {canRdf && projectId && (
+                <a
+                  href={api.answerExportUrl(projectId, a.answer_id, 'ttl')}
+                  download
+                  title="This one query and its estimate, as cw: RDF"
+                  className="shrink-0 font-mono text-[9.5px] uppercase text-faint opacity-0 transition-opacity hover:text-indigo group-hover:opacity-100"
+                >
+                  ttl
+                </a>
+              )}
             </div>
             <div className="flex flex-wrap gap-1.5 text-[9.5px] text-faint">
               <span

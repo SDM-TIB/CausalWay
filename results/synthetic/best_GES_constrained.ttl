@@ -1,251 +1,300 @@
-@prefix ckg: <http://sdm-causalkg.org/> .
+@prefix cw: <http://sdm-causalway.org/> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
-@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/0_2> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/0_2> a cw:CausalEdge ;
     rdfs:label "Hospital.airPollution --[ε]--> Hospital.region" ;
-    ckg:cause <http://sdm-causalkg.org/node/Hospital.airPollution-09cc1900> ;
-    ckg:effect <http://sdm-causalkg.org/node/Hospital.region-ef08c4e5> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> ;
+    cw:effect <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/0_7> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/0_7> a cw:CausalEdge ;
     rdfs:label "Hospital.airPollution --[treatedAt (inverse)]--> Patient.tumorStage" ;
-    ckg:cause <http://sdm-causalkg.org/node/Hospital.airPollution-09cc1900> ;
-    ckg:effect <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationDirection "inverse" ;
-    ckg:relationLabel "treatedAt (inverse)" ;
-    ckg:viaRelation <http://causalkg.example.org/synthetic/treatedAt> ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> ;
+    cw:effect <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaPath "^<http://causalkg.example.org/synthetic/treatedAt>" ;
+    cw:viaRelation <http://causalkg.example.org/synthetic/treatedAt> ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/10_6> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/10_6> a cw:CausalEdge ;
     rdfs:label "Therapy.toxicity --[receives (inverse)]--> Patient.survival" ;
-    ckg:cause <http://sdm-causalkg.org/node/Therapy.toxicity-24758fb0> ;
-    ckg:effect <http://sdm-causalkg.org/node/Patient.survival-34e72eae> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationDirection "inverse" ;
-    ckg:relationLabel "receives (inverse)" ;
-    ckg:viaRelation <http://causalkg.example.org/synthetic/receives> ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
+    cw:effect <http://sdm-causalway.org/node/Patient.survival-34e72eae> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaPath "^<http://causalkg.example.org/synthetic/receives>" ;
+    cw:viaRelation <http://causalkg.example.org/synthetic/receives> ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/1_2> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/1_2> a cw:CausalEdge ;
     rdfs:label "Hospital.careQuality --[ε]--> Hospital.region" ;
-    ckg:cause <http://sdm-causalkg.org/node/Hospital.careQuality-8f1268f5> ;
-    ckg:effect <http://sdm-causalkg.org/node/Hospital.region-ef08c4e5> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> ;
+    cw:effect <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/1_6> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/1_6> a cw:CausalEdge ;
     rdfs:label "Hospital.careQuality --[treatedAt (inverse)]--> Patient.survival" ;
-    ckg:cause <http://sdm-causalkg.org/node/Hospital.careQuality-8f1268f5> ;
-    ckg:effect <http://sdm-causalkg.org/node/Patient.survival-34e72eae> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationDirection "inverse" ;
-    ckg:relationLabel "treatedAt (inverse)" ;
-    ckg:viaRelation <http://causalkg.example.org/synthetic/treatedAt> ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> ;
+    cw:effect <http://sdm-causalway.org/node/Patient.survival-34e72eae> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaPath "^<http://causalkg.example.org/synthetic/treatedAt>" ;
+    cw:viaRelation <http://causalkg.example.org/synthetic/treatedAt> ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/2_0> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/2_0> a cw:CausalEdge ;
     rdfs:label "Hospital.region --[ε]--> Hospital.airPollution" ;
-    ckg:cause <http://sdm-causalkg.org/node/Hospital.region-ef08c4e5> ;
-    ckg:effect <http://sdm-causalkg.org/node/Hospital.airPollution-09cc1900> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> ;
+    cw:effect <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/2_1> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/2_1> a cw:CausalEdge ;
     rdfs:label "Hospital.region --[ε]--> Hospital.careQuality" ;
-    ckg:cause <http://sdm-causalkg.org/node/Hospital.region-ef08c4e5> ;
-    ckg:effect <http://sdm-causalkg.org/node/Hospital.careQuality-8f1268f5> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> ;
+    cw:effect <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/4_7> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/4_7> a cw:CausalEdge ;
     rdfs:label "Patient.geneticRisk --[ε]--> Patient.tumorStage" ;
-    ckg:cause <http://sdm-causalkg.org/node/Patient.geneticRisk-f8c8424f> ;
-    ckg:effect <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f> ;
+    cw:effect <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/5_7> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/5_7> a cw:CausalEdge ;
     rdfs:label "Patient.smoking --[ε]--> Patient.tumorStage" ;
-    ckg:cause <http://sdm-causalkg.org/node/Patient.smoking-fccb5af1> ;
-    ckg:effect <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Patient.smoking-fccb5af1> ;
+    cw:effect <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/7_3> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/7_3> a cw:CausalEdge ;
     rdfs:label "Patient.tumorStage --[ε]--> Patient.age" ;
-    ckg:cause <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> ;
-    ckg:effect <http://sdm-causalkg.org/node/Patient.age-4dbfd8ef> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:effect <http://sdm-causalway.org/node/Patient.age-4dbfd8ef> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/7_6> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/7_6> a cw:CausalEdge ;
     rdfs:label "Patient.tumorStage --[ε]--> Patient.survival" ;
-    ckg:cause <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> ;
-    ckg:effect <http://sdm-causalkg.org/node/Patient.survival-34e72eae> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:effect <http://sdm-causalway.org/node/Patient.survival-34e72eae> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/7_8> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/7_8> a cw:CausalEdge ;
     rdfs:label "Patient.tumorStage --[receives (forward)]--> Therapy.dosage" ;
-    ckg:cause <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> ;
-    ckg:effect <http://sdm-causalkg.org/node/Therapy.dosage-eecb994a> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationDirection "forward" ;
-    ckg:relationLabel "receives (forward)" ;
-    ckg:viaRelation <http://causalkg.example.org/synthetic/receives> ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:effect <http://sdm-causalway.org/node/Therapy.dosage-eecb994a> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation <http://causalkg.example.org/synthetic/receives> ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/8_10> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/8_10> a cw:CausalEdge ;
     rdfs:label "Therapy.dosage --[ε]--> Therapy.toxicity" ;
-    ckg:cause <http://sdm-causalkg.org/node/Therapy.dosage-eecb994a> ;
-    ckg:effect <http://sdm-causalkg.org/node/Therapy.toxicity-24758fb0> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Therapy.dosage-eecb994a> ;
+    cw:effect <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/9_10> a ckg:CausalEdge ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/edge/9_10> a cw:CausalEdge ;
     rdfs:label "Therapy.drugClass --[ε]--> Therapy.toxicity" ;
-    ckg:cause <http://sdm-causalkg.org/node/Therapy.drugClass-f347a825> ;
-    ckg:effect <http://sdm-causalkg.org/node/Therapy.toxicity-24758fb0> ;
-    ckg:inGraph <http://sdm-causalkg.org/graph/ocg-15078d93349b> ;
-    ckg:relationLabel "ε" ;
-    ckg:viaRelation ckg:epsilon ;
-    ckg:weight 1e+00 .
+    cw:cause <http://sdm-causalway.org/node/Therapy.drugClass-f347a825> ;
+    cw:effect <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:viaRelation cw:epsilon ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalkg.org/run/ocg-15078d93349b> a prov:Activity,
-        ckg:DiscoveryRun ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/0> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 0 ;
+    cw:slotNode <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/1> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 1 ;
+    cw:slotNode <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/10> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 10 ;
+    cw:slotNode <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/2> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 2 ;
+    cw:slotNode <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/3> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 3 ;
+    cw:slotNode <http://sdm-causalway.org/node/Patient.age-4dbfd8ef> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/4> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 4 ;
+    cw:slotNode <http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/5> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 5 ;
+    cw:slotNode <http://sdm-causalway.org/node/Patient.smoking-fccb5af1> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/6> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 6 ;
+    cw:slotNode <http://sdm-causalway.org/node/Patient.survival-34e72eae> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/7> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 7 ;
+    cw:slotNode <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/8> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 8 ;
+    cw:slotNode <http://sdm-causalway.org/node/Therapy.dosage-eecb994a> .
+
+<http://sdm-causalway.org/graph/ocg-15078d93349b/slot/9> a cw:NodeSlot ;
+    cw:inGraph <http://sdm-causalway.org/graph/ocg-15078d93349b> ;
+    cw:slotIndex 9 ;
+    cw:slotNode <http://sdm-causalway.org/node/Therapy.drugClass-f347a825> .
+
+<http://sdm-causalway.org/run/ocg-15078d93349b> a cw:DiscoveryRun,
+        prov:Activity ;
     rdfs:label "Causal discovery run: unspecified method" ;
-    prov:endedAtTime "2026-09-02T09:14:14+00:00"^^xsd:dateTime .
+    prov:endedAtTime "2026-09-23T07:44:56+00:00"^^xsd:dateTime .
 
-<http://sdm-causalkg.org/node/Patient.age-4dbfd8ef> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Patient.age-4dbfd8ef> a cw:PropertyNode ;
     rdfs:label "Patient.age" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Patient> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/age> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Patient> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/age> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Patient.geneticRisk-f8c8424f> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f> a cw:PropertyNode ;
     rdfs:label "Patient.geneticRisk" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Patient> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/geneticRisk> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Patient> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/geneticRisk> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Patient.smoking-fccb5af1> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Patient.smoking-fccb5af1> a cw:PropertyNode ;
     rdfs:label "Patient.smoking" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Patient> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/smoking> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Patient> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/smoking> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Therapy.drugClass-f347a825> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Therapy.drugClass-f347a825> a cw:PropertyNode ;
     rdfs:label "Therapy.drugClass" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Therapy> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/drugClass> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Therapy> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/drugClass> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Therapy.dosage-eecb994a> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Therapy.dosage-eecb994a> a cw:PropertyNode ;
     rdfs:label "Therapy.dosage" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Therapy> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/dosage> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Therapy> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/dosage> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Hospital.airPollution-09cc1900> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> a cw:PropertyNode ;
     rdfs:label "Hospital.airPollution" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Hospital> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/airPollution> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Hospital> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/airPollution> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Hospital.careQuality-8f1268f5> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> a cw:PropertyNode ;
     rdfs:label "Hospital.careQuality" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Hospital> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/careQuality> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Hospital> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/careQuality> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Patient.survival-34e72eae> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Patient.survival-34e72eae> a cw:PropertyNode ;
     rdfs:label "Patient.survival" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Patient> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/survival> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Patient> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/survival> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Therapy.toxicity-24758fb0> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> a cw:PropertyNode ;
     rdfs:label "Therapy.toxicity" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Therapy> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/toxicity> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Therapy> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/toxicity> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Hospital.region-ef08c4e5> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Hospital.region-ef08c4e5> a cw:PropertyNode ;
     rdfs:label "Hospital.region" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Hospital> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/region> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Hospital> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/region> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> a ckg:PropertyNode ;
+<http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> a cw:PropertyNode ;
     rdfs:label "Patient.tumorStage" ;
-    ckg:domainClass <http://causalkg.example.org/synthetic/Patient> ;
-    ckg:nodeKind "data" ;
-    ckg:property <http://causalkg.example.org/synthetic/tumorStage> ;
-    ckg:rangeDatatype xsd:string .
+    cw:domain <http://causalkg.example.org/synthetic/Patient> ;
+    cw:nodeKind "data" ;
+    cw:property <http://causalkg.example.org/synthetic/tumorStage> ;
+    cw:range xsd:string .
 
-<http://sdm-causalkg.org/graph/ocg-15078d93349b> a prov:Entity,
-        ckg:OntologicalCausalGraph ;
+<http://sdm-causalway.org/graph/ocg-15078d93349b> a cw:OntologicalCausalGraph,
+        prov:Entity ;
     rdfs:label "Ontological causal graph (unspecified method)" ;
-    prov:wasGeneratedBy <http://sdm-causalkg.org/run/ocg-15078d93349b> ;
-    ckg:edgeCount 14 ;
-    ckg:hasEdge <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/0_2>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/0_7>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/10_6>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/1_2>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/1_6>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/2_0>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/2_1>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/4_7>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/5_7>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/7_3>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/7_6>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/7_8>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/8_10>,
-        <http://sdm-causalkg.org/graph/ocg-15078d93349b/edge/9_10> ;
-    ckg:hasNode <http://sdm-causalkg.org/node/Hospital.airPollution-09cc1900>,
-        <http://sdm-causalkg.org/node/Hospital.careQuality-8f1268f5>,
-        <http://sdm-causalkg.org/node/Hospital.region-ef08c4e5>,
-        <http://sdm-causalkg.org/node/Patient.age-4dbfd8ef>,
-        <http://sdm-causalkg.org/node/Patient.geneticRisk-f8c8424f>,
-        <http://sdm-causalkg.org/node/Patient.smoking-fccb5af1>,
-        <http://sdm-causalkg.org/node/Patient.survival-34e72eae>,
-        <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307>,
-        <http://sdm-causalkg.org/node/Therapy.dosage-eecb994a>,
-        <http://sdm-causalkg.org/node/Therapy.drugClass-f347a825>,
-        <http://sdm-causalkg.org/node/Therapy.toxicity-24758fb0> ;
-    ckg:nodeCount 11 ;
-    ckg:nodeList ( <http://sdm-causalkg.org/node/Hospital.airPollution-09cc1900> <http://sdm-causalkg.org/node/Hospital.careQuality-8f1268f5> <http://sdm-causalkg.org/node/Hospital.region-ef08c4e5> <http://sdm-causalkg.org/node/Patient.age-4dbfd8ef> <http://sdm-causalkg.org/node/Patient.geneticRisk-f8c8424f> <http://sdm-causalkg.org/node/Patient.smoking-fccb5af1> <http://sdm-causalkg.org/node/Patient.survival-34e72eae> <http://sdm-causalkg.org/node/Patient.tumorStage-5b1f8307> <http://sdm-causalkg.org/node/Therapy.dosage-eecb994a> <http://sdm-causalkg.org/node/Therapy.drugClass-f347a825> <http://sdm-causalkg.org/node/Therapy.toxicity-24758fb0> ) .
+    cw:edgeCount 14 ;
+    cw:hasEdge <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/0_2>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/0_7>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/10_6>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/1_2>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/1_6>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/2_0>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/2_1>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/4_7>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/5_7>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/7_3>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/7_6>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/7_8>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/8_10>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/edge/9_10> ;
+    cw:hasNode <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900>,
+        <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5>,
+        <http://sdm-causalway.org/node/Hospital.region-ef08c4e5>,
+        <http://sdm-causalway.org/node/Patient.age-4dbfd8ef>,
+        <http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f>,
+        <http://sdm-causalway.org/node/Patient.smoking-fccb5af1>,
+        <http://sdm-causalway.org/node/Patient.survival-34e72eae>,
+        <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307>,
+        <http://sdm-causalway.org/node/Therapy.dosage-eecb994a>,
+        <http://sdm-causalway.org/node/Therapy.drugClass-f347a825>,
+        <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
+    cw:hasNodeSlot <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/0>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/1>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/10>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/2>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/3>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/4>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/5>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/6>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/7>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/8>,
+        <http://sdm-causalway.org/graph/ocg-15078d93349b/slot/9> ;
+    cw:nodeCount 11 ;
+    prov:wasGeneratedBy <http://sdm-causalway.org/run/ocg-15078d93349b> .
 

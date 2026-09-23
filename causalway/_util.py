@@ -1,4 +1,4 @@
-"""Shared small helpers for the ``causalkg`` package."""
+"""Shared small helpers for the ``causalway`` package."""
 
 from __future__ import annotations
 

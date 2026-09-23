@@ -66,6 +66,20 @@ export interface NodeInfo {
    */
   role: ObjectRole | null
   role_options: RoleOptions | null
+  /**
+   * W30 — object properties only: the range class declares no data properties,
+   * so it is an attribute someone modelled as a class (an age band, a stage).
+   * These start in the `variable` role rather than `relationship`, because
+   * joining a class with no columns contributes nothing. A fact about the
+   * schema, so it stays `true` after the user overrides the role.
+   */
+  auto_variable: boolean
+  /**
+   * W31 — index of the connected component this node's *domain* sits in. Only
+   * one component is materialised at a time, so this is what says whether the
+   * node is in the query currently on screen.
+   */
+  component: number | null
   n_distinct: number | null
   n_rows: number | null
   near_unique: boolean
@@ -95,10 +109,20 @@ export interface ConstraintStats {
   [k: string]: number
 }
 
+/**
+ * One connected component of the class graph — one candidate join (W31).
+ *
+ * `classes` is what makes it pickable: an index is not a choice a human can make
+ * among seventy. `n_retained` is how many of its nodes are candidate variables
+ * right now, and zero is the one value `materialise` refuses outright, so the
+ * picker can say so before the click rather than after.
+ */
 export interface ComponentInfo {
   index: number
   n_classes: number
   n_nodes: number
+  n_retained: number
+  classes: string[]
 }
 
 export interface NodesPayload {
@@ -109,6 +133,8 @@ export interface NodesPayload {
   type_options: TypeOptions
   dtypes: Record<string, DType>
   components: ComponentInfo[]
+  /** What `component: null` resolves to at this curation; `null` when nothing is retained. */
+  auto_component: number | null
 }
 
 export interface SchemaPayload {
@@ -677,10 +703,16 @@ export const api = {
   matStatus: (pid: string) => req<MatJob>(`/api/projects/${pid}/materialise/status`),
   matCancel: (pid: string) =>
     req<MatJob>(`/api/projects/${pid}/materialise/cancel`, { method: 'POST' }),
-  /** Cheap — no SPARQL execution — so it can be called on every curation change. */
-  materialisePreview: (pid: string, limit: number | null) =>
+  /** Cheap — no SPARQL execution — so it can be called on every curation or component change. */
+  materialisePreview: (pid: string, limit: number | null, component: number | null) =>
     req<GraphPatternPreview>(
-      `/api/projects/${pid}/materialise/preview` + (limit === null ? '' : `?limit=${limit}`),
+      `/api/projects/${pid}/materialise/preview?` +
+        [
+          limit === null ? '' : `limit=${limit}`,
+          component === null ? '' : `component=${component}`,
+        ]
+          .filter(Boolean)
+          .join('&'),
     ),
 
   context: (pid: string, component: number | null, limit: number | null) =>
@@ -875,4 +907,13 @@ export const api = {
       ? `${base}&${select.param}=${select.ids.join(',')}`
       : base
   },
+
+  /**
+   * One logged answer, rather than the whole session log. `ttl` renders the
+   * query, its interventions, the observational conditions that scope it and
+   * the estimate as `cw:` RDF; it needs a fitted model, because a node IRI
+   * cannot be resolved without one.
+   */
+  answerExportUrl: (pid: string, aid: number, format: 'json' | 'csv' | 'ttl') =>
+    `/api/projects/${pid}/answers/${aid}/export?format=${format}`,
 }

@@ -2,7 +2,7 @@
 
 ``dowhy.gcm`` has no ``P(Y | X = x)`` primitive, so :func:`condition` is a
 tiered backend ladder, selected automatically and always reported on the
-returned :class:`~causalkg.queries.Answer`:
+returned :class:`~causalway.queries.Answer`:
 
 0. **mechanism** — evidence covers ``target``'s parents (and no evidence key
    is a descendant of ``target``, so it is screened off by the parents alone,
@@ -14,7 +14,7 @@ returned :class:`~causalkg.queries.Answer`:
    (categorical: ``estimate_probabilities``; continuous: a Gaussian KDE over
    the fitted ANM's noise samples — never rejects).
 3. **rejection** — a safety-net fallback for a mechanism with no usable
-   density (unreachable for the mechanism families :mod:`causalkg.model`
+   density (unreachable for the mechanism families :mod:`causalway.model`
    assigns, kept for custom/future mechanisms).
 
 Tier 1b (exact linear-Gaussian via ``pgmpy.LinearGaussianBayesianNetwork``,
@@ -29,7 +29,7 @@ that costs.
 
 **A query has 1..n targets.** ``Query.target`` was always a list (§6.3), and
 all three engines here accept either one node name or a collection of them.
-A bare ``str`` returns one :class:`~causalkg.queries.Answer` (unchanged); a
+A bare ``str`` returns one :class:`~causalway.queries.Answer` (unchanged); a
 list/tuple/set returns ``{node: Answer}``, one per target, even for a
 one-element collection — the *shape you asked in* decides the shape you get
 back, so a caller never has to guess.
@@ -122,7 +122,7 @@ def condition(model, target: Targets, evidence: dict, *, conditions: Optional[di
     weighted sample set, so their answers are mutually consistent and the
     expensive step is paid once rather than per target.
 
-    ``conditions`` is the sub-population selector (CATE, ``ckg:hasCondition``)
+    ``conditions`` is the sub-population selector (CATE, ``cw:hasCondition``)
     and is merged with ``evidence`` for computation — both narrow the same
     conditioning set; the RDF layer keeps them distinct (§6.3) because they
     mean different things (observed evidence vs. a population filter), not
@@ -252,6 +252,11 @@ def _tier0_mechanism_many(model, targets: list, all_evidence: dict,
 
 
 def _tier0_mechanism(model, target: str, all_evidence: dict) -> Optional[Answer]:
+    # A root has no parents to plug in: its mechanism is a plain distribution
+    # (e.g. EmpiricalDistribution), with no noise to draw and nothing to evaluate.
+    # Its answer is the marginal, which the next tiers compute.
+    if is_root_node(model.scm.graph, target):
+        return None
     parents = set(model.scm.graph.predecessors(target))
     if not parents.issubset(all_evidence.keys()):
         return None
@@ -426,7 +431,7 @@ def _tier3_rejection(model, targets: list, all_evidence: dict, num_samples: int)
     """Draw joint samples ignoring evidence, then exact/kernel-weight-match it post hoc.
 
     Safety-net fallback for a mechanism with no usable density (unreachable
-    given the mechanism families :mod:`causalkg.model` assigns). One draw and
+    given the mechanism families :mod:`causalway.model` assigns). One draw and
     one weight vector for every target, same as tier 2.
     """
     samples = gcm.interventional_samples(model.scm, {}, num_samples_to_draw=num_samples)
@@ -588,10 +593,10 @@ def counterfactual(model, interventions: dict, *, entity: str, target: Targets,
     entity's property it names (Plan 2 §10 risk #2).
 
     Which rows *are* this entity's is read from ``model.spec.mat.entity_ids``
-    (via :func:`causalkg.entities.population_rows`), the flat join's record of
+    (via :func:`causalway.entities.population_rows`), the flat join's record of
     which entity owns which cell — so a model fitted on a different join than
     the one the entity was chosen from would abduct from the wrong rows. See
-    :func:`causalkg.model._materialize_kg`.
+    :func:`causalway.model._materialize_kg`.
 
     ``target`` is one node name (one :class:`Answer` back) or a collection of
     them (``{node: Answer}`` back). All targets are read off **one** sequence

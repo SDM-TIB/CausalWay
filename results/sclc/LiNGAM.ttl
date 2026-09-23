@@ -1,18 +1,18 @@
-@prefix ckg: <http://sdm-causalkg.org/> .
+@prefix cw: <http://sdm-causalway.org/> .
 
-<http://sdm-causalkg.org/edge/7_9> a ckg:CausalEdge ;
-    ckg:cause <http://causalkg.example.org/sclc/relapseStatus> ;
-    ckg:effect <http://causalkg.example.org/sclc/stage> .
+<http://sdm-causalway.org/edge/7_9> a cw:CausalEdge ;
+    cw:cause <http://causalkg.example.org/sclc/relapseStatus> ;
+    cw:effect <http://causalkg.example.org/sclc/stage> .
 
-<http://sdm-causalkg.org/edge/8_1> a ckg:CausalEdge ;
-    ckg:cause <http://causalkg.example.org/sclc/smokerType> ;
-    ckg:effect <http://causalkg.example.org/sclc/biomarker> .
+<http://sdm-causalway.org/edge/8_1> a cw:CausalEdge ;
+    cw:cause <http://causalkg.example.org/sclc/smokerType> ;
+    cw:effect <http://causalkg.example.org/sclc/biomarker> .
 
-<http://sdm-causalkg.org/edge/8_5> a ckg:CausalEdge ;
-    ckg:cause <http://causalkg.example.org/sclc/smokerType> ;
-    ckg:effect <http://causalkg.example.org/sclc/gender> .
+<http://sdm-causalway.org/edge/8_5> a cw:CausalEdge ;
+    cw:cause <http://causalkg.example.org/sclc/smokerType> ;
+    cw:effect <http://causalkg.example.org/sclc/gender> .
 
-<http://sdm-causalkg.org/edge/8_6> a ckg:CausalEdge ;
-    ckg:cause <http://causalkg.example.org/sclc/smokerType> ;
-    ckg:effect <http://causalkg.example.org/sclc/locatedIn> .
+<http://sdm-causalway.org/edge/8_6> a cw:CausalEdge ;
+    cw:cause <http://causalkg.example.org/sclc/smokerType> ;
+    cw:effect <http://causalkg.example.org/sclc/locatedIn> .
 

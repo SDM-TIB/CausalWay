@@ -11,7 +11,7 @@ if _PROJECT_ROOT not in sys.path:
 
 import numpy as np
 
-from causalkg.synthetic import generate, GROUND_TRUTH_EDGES, truth_adjacency
+from causalway.synthetic import generate, GROUND_TRUTH_EDGES, truth_adjacency
 from runners.run_kg_discovery import build_context, DiscoveryContext
 
 SYNTHETIC_TTL = os.path.join(_PROJECT_ROOT, "kgs", "ttls", "synthetic_clinic.ttl")

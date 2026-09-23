@@ -5,10 +5,10 @@ import os
 import pandas as pd
 import pytest
 
-from causalkg.ontology import OntologySchema
-from causalkg.nodes import build_nodes
-from causalkg.constraints import EdgeConstraint
-from causalkg.bgp import (
+from causalway.ontology import OntologySchema
+from causalway.nodes import build_nodes
+from causalway.constraints import EdgeConstraint
+from causalway.bgp import (
     DisconnectedJoinError,
     build_query,
     join_role_options,

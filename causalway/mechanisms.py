@@ -29,7 +29,7 @@ particular coupling (Oberst & Sontag, "Counterfactual Off-Policy Evaluation
 with Gumbel-Max Structural Causal Models", ICML 2019, building on the
 abduction identity in Maddison, Tarlow & Minka, "A* Sampling", NeurIPS 2014).
 Every answer computed with this mechanism should carry
-``ckg:counterfactualCoupling "gumbel-max"`` so the choice is visible rather
+``cw:counterfactualCoupling "gumbel-max"`` so the choice is visible rather
 than implied.
 """
 
@@ -109,7 +109,7 @@ class InvertibleClassifierFCM(ClassifierFCM, InvertibleFunctionalCausalModel):
     documented: a stochastic result published as an RDF assertion that nobody
     can recompute is the worst of both worlds.  Each node gets its own
     generator, spawned from the model's ``random_state`` by node name in
-    :meth:`causalkg.model.CausalModel.fit`, so the draws do not depend on the
+    :meth:`causalway.model.CausalModel.fit`, so the draws do not depend on the
     order gcm happens to visit nodes in — sharing one stream across nodes would
     make every answer a function of that traversal order.
 

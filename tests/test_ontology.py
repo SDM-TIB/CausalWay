@@ -2,8 +2,8 @@
 
 import os
 
-from causalkg.ontology import OntologySchema
-from causalkg._util import local_name
+from causalway.ontology import OntologySchema
+from causalway._util import local_name
 
 SCLC_TTL = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

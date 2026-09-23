@@ -1,4 +1,4 @@
-# CausalKG web frontend
+# CausalWay web frontend
 
 React 18 + TypeScript + Vite + Tailwind v4 + [React Flow](https://reactflow.dev) + Zustand.
 Implements Plan 3 in **four** modules: preprocess, causal discovery, inference, counterfactual.
@@ -83,7 +83,18 @@ is `null`, which is every ordinary project.
   (`TONES` and `ROLE` in `flow/cards.tsx`) rather than built by interpolation. `` `text-${tone}` ``
   silently produces no CSS.
 - **React Flow's `fitView` prop is init-only.** `flow/FitOnResize.tsx` re-fits on container resize;
-  without it the graph drifts off-centre when a sidebar collapses.
+  without it the graph drifts off-centre when a sidebar collapses. It takes an optional `focus`
+  getter for a canvas whose subject is smaller than itself (the ontology canvas's chosen
+  component) — without it, a panel below growing by one row silently zooms the user back out
+  from the component they picked to all seventy.
+- **Fitting to nodes that were just replaced does nothing.** Rebuilding the node array — which
+  the ontology canvas does whenever the chosen component changes, because the dim styles live
+  on the nodes — makes React Flow re-adopt every card as *unmeasured*, and a `fitView` in that
+  window returns `true` and moves the camera not at all. Neither `useNodesInitialized` nor
+  `nodes === seedNodes` marks the far edge of it reliably: both are already true on renders
+  where the measurements still describe the outgoing cards. This is why "zoom to component" is
+  a button rather than an automatic fly-to — which also suits W13, where the user's own
+  arrangement is the authoritative one.
 - **Node positions are server state**, not browser state — `PUT /api/projects/{id}/layout`,
   debounced on drag stop, one record per canvas. See Plan 3 W13. **Pane geometry is the
   opposite**: rail widths and centre-panel heights live in `localStorage` under `ckg-panes`
@@ -110,8 +121,27 @@ is `null`, which is every ordinary project.
   the answer does not contain.
 - **Modules 3 and 4 share one board.** The difference between an intervention and a counterfactual is
   the *unit*, not the drawing. Don't fork `modules/query/`.
-- **Two layout seeds on purpose.** Module 2 seeds on a ring (a ledger of competing claims with no
-  agreed direction); modules 3–4 seed on topological layers, so depth means causal depth.
+- **Three layout seeds on purpose.** Module 1's ontology canvas seeds on a **force-directed**
+  relaxation (`flow/forceLayout.ts`) — a T-Box has no direction and no ordering, what it has is
+  adjacency. Module 2 seeds on a ring (a ledger of competing claims with no agreed direction);
+  modules 3–4 seed on topological layers, so depth means causal depth. All three are *seeds*:
+  one-shot, deterministic, and overruled by the stored layout from the first drag. Nothing
+  animates — a live simulation would re-settle on every curation click and rearrange a canvas
+  the user had already organised.
+- **The connected component is a choice (W31).** One `materialise` is one basic graph pattern
+  over one component of the class graph — Assumption 1 forbids every edge between two classes
+  with no relation path, so joining two of them could only make a cross product. What was
+  missing is that nothing ever *picked* one: the server fell back to the largest and the client
+  never sent anything else, which is invisible on the single-component samples and hides 69 of
+  70 on a real endpoint. `Join scope` (1·3) picks it, `component: null` still means *auto* (the
+  largest, re-decided as the curation changes), and materialising pins whatever ran. The
+  curation list scopes itself to that component, the ontology canvas draws the rest of the
+  T-Box faint rather than hiding it, and clicking any class card switches to its component.
+- **An object property pointing at a class with no data properties starts as a `variable`**
+  (W30). An age band or a tumour stage modelled as a class contributes no columns through a
+  join, so the `relationship` default was dropping the one fact it carries. The `cat` badge in
+  the curation panel marks them; it is a fact about the *schema*, so it stays on after the user
+  overrides the role.
 - **A card is the answer.** `POST /infer/predict` returns every node's posterior off one shared
   sample set, and the cards draw it; there is no single-target answer panel any more. On a free
   card the prior stays drawn behind the posterior, so a bar that did not move is visibly a bar

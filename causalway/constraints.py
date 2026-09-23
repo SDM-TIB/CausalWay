@@ -19,7 +19,7 @@ from ._util import local_name
 from .nodes import PropertyNode
 from .ontology import OntologySchema
 
-EPSILON = URIRef("http://sdm-causalkg.org/epsilon")
+EPSILON = URIRef("http://sdm-causalway.org/epsilon")
 
 
 def _relations_between(schema: OntologySchema, from_cls, to_cls,

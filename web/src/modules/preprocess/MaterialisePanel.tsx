@@ -22,17 +22,23 @@ import { Badge, Button, Field, Icon, Info, Input, Note, Panel, StatGrid, Tabs } 
  * discards the result rather than halting the query.
  */
 export function MaterialisePanel() {
-  const { components, limit, mat, matJob, dtypes, graphPattern } = useStore()
+  const { components, component, autoComponent, limit, mat, matJob, dtypes } = useStore()
+  const { graphPattern, graphPatternError } = useStore()
   const { setLimit, materialise, cancelMaterialise } = useStore()
   const [tab, setTab] = useState<'rows' | 'sparql' | 'types' | 'stats'>('rows')
   const [draftLimit, setDraftLimit] = useState('')
 
   const running = matJob?.state === 'running'
   const multi = mat?.has_multi_relation
+  // W31: which component the query above is for. `null` means auto, and auto is
+  // the server's own choice, reported back on `auto_component`.
+  const effective = component ?? autoComponent
+  const active = components.find((c) => c.index === effective) ?? null
+  const empty = active !== null && active.n_retained === 0
 
   return (
     <Panel
-      step="1·4"
+      step="1·5"
       title="Materialisation"
       right={
         <Info>
@@ -52,10 +58,21 @@ export function MaterialisePanel() {
             Stop
           </Button>
         ) : (
-          <Button variant="primary" onClick={() => materialise(limit)}>
+          <Button
+            variant="primary"
+            disabled={empty}
+            title={empty ? `Component ${effective} has no retained nodes to select.` : undefined}
+            onClick={() => materialise(limit)}
+          >
             <Icon name="play" className="text-[12px]" />
             {mat ? 'Re-run' : 'Materialise'}
           </Button>
+        )}
+        {components.length > 1 && effective !== null && (
+          <Badge tone="teal" title="The connected component this query runs over. Change it in Join scope.">
+            component {effective} of {components.length}
+            {component === null ? ' · auto' : ''}
+          </Badge>
         )}
       </div>
 
@@ -97,14 +114,18 @@ export function MaterialisePanel() {
         </div>
       )}
 
-      <GraphPatternBox preview={graphPattern} />
+      <GraphPatternBox preview={graphPattern} error={graphPatternError} />
 
       {components.length > 1 && (
         <Note>
-          The class graph has {components.length} connected components. Assumption 1 forbids every
-          edge between two classes with no relation path, so a cross-component edge is
-          inadmissible by construction — the query above always runs on the component with the
-          most retained nodes, and running one component at a time loses nothing (Plan 3 §3.6).
+          The class graph has {components.length} connected components, and this is the query
+          for <strong>component {effective}</strong>
+          {active ? ` (${active.n_retained} of ${active.n_nodes} nodes retained)` : ''}. Pick a
+          different one in <strong>Join scope</strong> on the left and the query above changes
+          with it. Assumption 1 forbids every edge between two classes with no relation path, so
+          a cross-component edge is inadmissible by construction: running one component at a time
+          loses nothing, but each component is its own analysis, not a slice of a larger one
+          (Plan 3 §3.6, W31).
         </Note>
       )}
 
@@ -316,11 +337,17 @@ function TypeTable({
  * change and lets the user catch a wrong pattern (an unintended cross product, a
  * relation that didn't join) before spending the time on the real thing.
  */
-function GraphPatternBox({ preview }: { preview: GraphPatternPreview | null }) {
+function GraphPatternBox({
+  preview,
+  error,
+}: {
+  preview: GraphPatternPreview | null
+  error: string | null
+}) {
   return (
     <Field
       label="Query"
-      hint="The SPARQL this Materialise run will use, live from the curation above — nothing has been queried yet."
+      hint="The SPARQL this Materialise run will use, live from the component and curation above — nothing has been queried yet."
     >
       {preview ? (
         <>
@@ -334,8 +361,12 @@ function GraphPatternBox({ preview }: { preview: GraphPatternPreview | null }) {
           </pre>
         </>
       ) : (
+        /* The server's own reason rather than one guess for every cause. With a
+           component picker "every node is excluded" is usually wrong — the
+           common case is a component whose nodes are all excluded, which is a
+           different sentence and a different fix (W31). */
         <p className="rounded-lg border border-dashed border-line px-2.5 py-2 text-[11px] text-faint">
-          Nothing to query yet — every node is excluded.
+          {error ?? 'Nothing to query yet — every node is excluded.'}
         </p>
       )}
     </Field>

@@ -5,6 +5,7 @@ import { OntologyCanvas } from './OntologyCanvas'
 import { MaterialisePanel } from './MaterialisePanel'
 import {
   ColumnTypePanel,
+  ComponentPanel,
   ConstraintPanel,
   NodeCurationPanel,
   SchemaPanel,
@@ -19,6 +20,11 @@ export function PreprocessModule() {
       left={
         <>
           <SourcePanel />
+          {/* Directly under the source, above the schema summary rather than
+              below it: this is a decision, the summary is a report, and a real
+              endpoint's summary is long enough (97 class chips on the one this
+              was built against) to push a decision a full screen out of sight. */}
+          <ComponentPanel />
           <SchemaPanel />
           <ConstraintPanel />
         </>

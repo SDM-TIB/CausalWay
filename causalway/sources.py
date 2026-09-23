@@ -2,7 +2,7 @@
 
 Both Plan 2 inputs (the causal graph and the knowledge graph) accept the same
 four shapes.  This module is the one place that dispatches on them, so
-:mod:`causalkg.model` and the notebooks never have to.
+:mod:`causalway.model` and the notebooks never have to.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from rdflib import RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLStore
 
 from .ontology import OntologySchema
-from .vocab import CKG, GRAPH_STEM, PROV
+from .vocab import CW, GRAPH_STEM, PROV
 
 GraphSource = Union[str, os.PathLike, rdflib.Graph]
 CausalGraphSource = Union[GraphSource, "OntologicalCausalGraph"]  # noqa: F821 (forward ref, see below)
@@ -44,11 +44,25 @@ def resolve_graph(source: GraphSource, *, format: Optional[str] = None,
       forwards to the endpoint;
     * anything else is treated as a file path and parsed, with the format
       guessed from the suffix when ``format`` is not given.
+
+    ``method="POST"`` is not a preference. rdflib's ``SPARQLConnector``
+    defaults to GET, which puts the whole query in the request URI, and a
+    ``bgp.materialize`` join is not a small query: a curated join over a
+    dozen classes runs to several kilobytes of absolute IRIs, and the
+    server answers **HTTP 414 Request-URI Too Long**. rdflib turns that into
+    ``ValueError("You did something wrong formulating either the URI or your
+    SPARQL query")``, which names the query rather than its length and sends
+    the reader off debugging perfectly valid SPARQL — this cost real time
+    against a live Virtuoso endpoint (5891 chars, refused by GET, answered by
+    POST). POST here is the URL-encoded form of the SPARQL 1.1 protocol, which
+    every mainstream engine accepts and which has no length limit. Do not
+    "simplify" it back to the default.
     """
     if isinstance(source, rdflib.Graph):
         return source
     if is_endpoint(source):
-        store = SPARQLStore(source, returnFormat="json", timeout=timeout)
+        store = SPARQLStore(source, returnFormat="json", timeout=timeout,
+                            method="POST")
         return rdflib.Graph(store=store)
     path = os.fspath(source)
     if not os.path.exists(path):
@@ -98,7 +112,7 @@ def load_ocg(source: CausalGraphSource, *, graph_id: Optional[str] = None,
     An already-built :class:`OntologicalCausalGraph` is returned unchanged.
     Everything else is resolved to an ``rdflib.Graph`` and read with
     :meth:`OntologicalCausalGraph.from_rdf`, which raises with the candidate
-    list when the graph carries more than one ``ckg:OntologicalCausalGraph``
+    list when the graph carries more than one ``cw:OntologicalCausalGraph``
     and neither ``graph_id`` nor ``method`` disambiguates it — see
     :func:`list_ocgs`.
     """
@@ -112,7 +126,7 @@ def load_ocg(source: CausalGraphSource, *, graph_id: Optional[str] = None,
 
 def list_ocgs(source: GraphSource, *, format: Optional[str] = None,
               timeout: int = 60) -> pd.DataFrame:
-    """One row per ``ckg:OntologicalCausalGraph`` instance found in ``source``.
+    """One row per ``cw:OntologicalCausalGraph`` instance found in ``source``.
 
     Columns: ``gid, method, constrained, n_nodes, n_edges, created_at, iri`` —
     exactly what's needed to pick a ``graph_id=`` or ``method=`` for
@@ -120,20 +134,20 @@ def list_ocgs(source: GraphSource, *, format: Optional[str] = None,
     """
     graph = resolve_graph(source, format=format, timeout=timeout)
     rows = []
-    for gi in graph.subjects(RDF.type, CKG.OntologicalCausalGraph):
-        n_nodes = graph.value(gi, CKG.nodeCount)
-        n_edges = graph.value(gi, CKG.edgeCount)
+    for gi in graph.subjects(RDF.type, CW.OntologicalCausalGraph):
+        n_nodes = graph.value(gi, CW.nodeCount)
+        n_edges = graph.value(gi, CW.edgeCount)
         run = graph.value(gi, PROV.wasGeneratedBy)
         created_at = graph.value(run, PROV.endedAtTime) if run is not None else None
         # Method and the constraint flag describe the run; older Turtle also
         # duplicated them onto the graph, so that copy is the fallback.
-        method = graph.value(run, CKG.method) if run is not None else None
-        constrained = (graph.value(run, CKG.usedTopologicalConstraint)
+        method = graph.value(run, CW.method) if run is not None else None
+        constrained = (graph.value(run, CW.usedTopologicalConstraint)
                        if run is not None else None)
         if method is None:
-            method = graph.value(gi, CKG.method)
+            method = graph.value(gi, CW.method)
         if constrained is None:
-            constrained = graph.value(gi, CKG.constrained)
+            constrained = graph.value(gi, CW.constrained)
         gid = str(gi)[len(GRAPH_STEM):] if str(gi).startswith(GRAPH_STEM) else str(gi)
         rows.append({
             "gid": gid,

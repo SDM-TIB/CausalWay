@@ -6,15 +6,15 @@ break independently and are checked separately here:
 
 * the JSON document (:meth:`OntologicalCausalGraph.to_json`) — pure Python,
   fast, no engine involved;
-* the mapping — that the engine really produces the ckg: terms the vocabulary
+* the mapping — that the engine really produces the cw: terms the vocabulary
   promises, with the right IRIs, datatypes and cardinalities;
 * the inverse (:meth:`OntologicalCausalGraph.from_rdf`) — including its
-  fallback onto the *legacy* ``ckg:nodeList`` / ``ckg:parameters`` shapes,
+  fallback onto the *legacy* ``cw:nodeList`` / ``cw:parameters`` shapes,
   since nothing regenerated the Turtle already sitting in ``results/``.
 
 Note that those ``results/*.ttl`` files cannot be used as fixtures: they were
-written when the vocabulary namespace was ``urn:causalkg:``, so ``from_rdf``
-finds no ``ckg:OntologicalCausalGraph`` in them at all. That is the
+written when the vocabulary namespace was ``urn:causalway:``, so ``from_rdf``
+finds no ``cw:OntologicalCausalGraph`` in them at all. That is the
 pre-existing failure in ``test_result_roundtrip.py`` / ``test_sources.py``,
 and it predates this module. Everything below builds its OCG from
 ``kgs/ttls/synthetic_clinic.ttl`` instead.
@@ -29,11 +29,11 @@ import pytest
 from rdflib import Graph, Literal, RDF, RDFS, URIRef, XSD
 from rdflib.collection import Collection
 
-from causalkg.constraints import EPSILON, EdgeConstraint
-from causalkg.nodes import build_nodes
-from causalkg.ontology import OntologySchema
-from causalkg.result import (
-    GRAPH_STEM, NODE_STEM, RUN_STEM, CKG, PROV,
+from causalway.constraints import EPSILON, EdgeConstraint
+from causalway.nodes import build_nodes
+from causalway.ontology import OntologySchema
+from causalway.result import (
+    GRAPH_STEM, NODE_STEM, RUN_STEM, CW, PROV,
     OntologicalCausalGraph, parse_property_path, render_property_path,
     write_bundle,
 )
@@ -59,7 +59,7 @@ def _ocg(max_hops: int = 1) -> OntologicalCausalGraph:
 
     Edges are taken from the constraint's own admissible set so that every
     edge carries a genuine relation label — an epsilon (intra-class) one and,
-    at ``max_hops=2``, a ``ckg:RelationPath``.
+    at ``max_hops=2``, a ``cw:RelationPath``.
     """
     schema = OntologySchema.from_source(CLINIC)
     nodes = build_nodes(schema, include_object_properties=True)
@@ -122,7 +122,7 @@ def test_to_json_omits_absent_fields_rather_than_nulling_them():
     assert "method" not in payload["graph"][0]
     assert "constrained" not in payload["graph"][0]
 
-    # One range term whatever the node kind — ckg:nodeKind carries the distinction.
+    # One range term whatever the node kind — cw:nodeKind carries the distinction.
     for record in payload["nodes"]:
         assert "range" in record
         assert "range_class" not in record and "range_datatype" not in record
@@ -139,6 +139,18 @@ def test_to_json_types_every_parameter_kind():
     assert kinds["n_runs"] == ("int", "3")
     assert kinds["priors"] == ("null", None)   # no value key at all
     assert kinds["note"] == ("str", "GES over the clinic")
+
+
+def test_numpy_scalar_parameters_type_like_their_python_values():
+    """A flag read back off a pandas index is np.bool_, not bool (notebook 05)."""
+    ocg = _ocg()
+    ocg.params = {"constrained": np.bool_(True), "n_runs": np.int64(3),
+                  "alpha": np.float64(0.05)}
+    kinds = {p["name"]: (p["kind"], p.get("value"))
+             for p in ocg.to_json()["parameters"]}
+    assert kinds == {"constrained": ("bool", "true"), "n_runs": ("int", "3"),
+                     "alpha": ("float", "0.05")}
+    ocg.to_rdf()   # used to raise: the JSON branch wrote the quoted text "True"
 
 
 def test_to_json_fills_created_at_once():
@@ -159,17 +171,17 @@ def test_to_rdf_mints_the_iris_the_python_helpers_promise():
     ocg = _ocg()
     g = ocg.to_rdf()
 
-    assert (ocg.iri, RDF.type, CKG.OntologicalCausalGraph) in g
+    assert (ocg.iri, RDF.type, CW.OntologicalCausalGraph) in g
     assert (ocg.iri, RDF.type, PROV.Entity) in g
-    assert (ocg.run_iri, RDF.type, CKG.DiscoveryRun) in g
+    assert (ocg.run_iri, RDF.type, CW.DiscoveryRun) in g
     assert (ocg.iri, PROV.wasGeneratedBy, ocg.run_iri) in g
     for k in range(ocg.n):
-        assert (ocg.node_iri(k), RDF.type, CKG.PropertyNode) in g
-        assert (ocg.iri, CKG.hasNode, ocg.node_iri(k)) in g
-        assert (ocg.slot_iri(k), CKG.slotNode, ocg.node_iri(k)) in g
+        assert (ocg.node_iri(k), RDF.type, CW.PropertyNode) in g
+        assert (ocg.iri, CW.hasNode, ocg.node_iri(k)) in g
+        assert (ocg.slot_iri(k), CW.slotNode, ocg.node_iri(k)) in g
     for (i, j) in ocg.edges():
-        assert (ocg.iri, CKG.hasEdge, ocg.edge_iri(i, j)) in g
-        assert (ocg.edge_iri(i, j), CKG.inGraph, ocg.iri) in g
+        assert (ocg.iri, CW.hasEdge, ocg.edge_iri(i, j)) in g
+        assert (ocg.edge_iri(i, j), CW.inGraph, ocg.iri) in g
 
     assert str(ocg.iri).startswith(GRAPH_STEM)
     assert str(ocg.run_iri).startswith(RUN_STEM)
@@ -180,22 +192,22 @@ def test_to_rdf_datatypes_and_provenance():
     ocg = _ocg()
     g = ocg.to_rdf()
 
-    assert g.value(ocg.iri, CKG.nodeCount) == Literal(ocg.n, datatype=XSD.integer)
-    assert g.value(ocg.iri, CKG.edgeCount) == Literal(len(ocg.edges()),
+    assert g.value(ocg.iri, CW.nodeCount) == Literal(ocg.n, datatype=XSD.integer)
+    assert g.value(ocg.iri, CW.edgeCount) == Literal(len(ocg.edges()),
                                                       datatype=XSD.integer)
     # The run holds the method and the constraint flag; the graph does not
     # duplicate them, it reaches them through prov:wasGeneratedBy.
-    assert g.value(ocg.iri, CKG.method) is None
-    assert g.value(ocg.iri, CKG.constrained) is None
-    assert str(g.value(ocg.run_iri, CKG.method)) == "GES"
-    assert g.value(ocg.run_iri, CKG.usedTopologicalConstraint) == Literal(
+    assert g.value(ocg.iri, CW.method) is None
+    assert g.value(ocg.iri, CW.constrained) is None
+    assert str(g.value(ocg.run_iri, CW.method)) == "GES"
+    assert g.value(ocg.run_iri, CW.usedTopologicalConstraint) == Literal(
         True, datatype=XSD.boolean)
-    assert str(g.value(ocg.run_iri, CKG.sourceKG)) == CLINIC
+    assert str(g.value(ocg.run_iri, CW.sourceKG)) == CLINIC
     assert str(g.value(ocg.run_iri, PROV.used)) == CLINIC
     assert g.value(ocg.run_iri, PROV.endedAtTime).datatype == XSD.dateTime
 
     for (i, j) in ocg.edges():
-        weight = g.value(ocg.edge_iri(i, j), CKG.weight)
+        weight = g.value(ocg.edge_iri(i, j), CW.weight)
         assert weight.datatype == XSD.double
         assert float(weight) == pytest.approx(ocg.weight(i, j))
 
@@ -204,13 +216,13 @@ def test_to_rdf_writes_parameters_as_resources_not_a_json_literal():
     ocg = _ocg()
     g = ocg.to_rdf()
 
-    assert g.value(ocg.run_iri, CKG.parameters) is None    # the legacy shape is gone
+    assert g.value(ocg.run_iri, CW.parameters) is None    # the legacy shape is gone
     found = {}
-    for param in g.objects(ocg.run_iri, CKG.hasParameter):
-        assert (param, RDF.type, CKG.Parameter) in g
-        value = g.value(param, CKG.parameterValue)
-        found[str(g.value(param, CKG.parameterName))] = (
-            str(g.value(param, CKG.parameterKind)),
+    for param in g.objects(ocg.run_iri, CW.hasParameter):
+        assert (param, RDF.type, CW.Parameter) in g
+        value = g.value(param, CW.parameterValue)
+        found[str(g.value(param, CW.parameterName))] = (
+            str(g.value(param, CW.parameterKind)),
             None if value is None else str(value),
         )
     assert found["alpha"] == ("float", "0.05")
@@ -223,12 +235,12 @@ def test_to_rdf_orders_nodes_by_slot_index():
     g = ocg.to_rdf()
 
     slots = sorted(
-        (int(g.value(s, CKG.slotIndex)), g.value(s, CKG.slotNode))
-        for s in g.objects(ocg.iri, CKG.hasNodeSlot)
+        (int(g.value(s, CW.slotIndex)), g.value(s, CW.slotNode))
+        for s in g.objects(ocg.iri, CW.hasNodeSlot)
     )
     assert [k for k, _ in slots] == list(range(ocg.n))
     assert [iri for _, iri in slots] == [ocg.node_iri(k) for k in range(ocg.n)]
-    assert g.value(ocg.iri, CKG.nodeList) is None   # no rdf:List any more
+    assert g.value(ocg.iri, CW.nodeList) is None   # no rdf:List any more
 
 
 def test_to_rdf_labels_epsilon_and_relation_edges():
@@ -238,20 +250,20 @@ def test_to_rdf_labels_epsilon_and_relation_edges():
     saw_epsilon = saw_relation = False
     for (i, j) in ocg.edges():
         edge = ocg.edge_iri(i, j)
-        relations = set(g.objects(edge, CKG.viaRelation))
-        assert relations, f"edge {i}->{j} carries no ckg:viaRelation"
+        relations = set(g.objects(edge, CW.viaRelation))
+        assert relations, f"edge {i}->{j} carries no cw:viaRelation"
         if EPSILON in relations:
             saw_epsilon = True
         if relations - {EPSILON}:
             saw_relation = True
     assert saw_epsilon and saw_relation
 
-    # ckg:epsilon has no direction, so it never gets a path; the reified path
+    # cw:epsilon has no direction, so it never gets a path; the reified path
     # resources and their five properties are gone entirely.
-    for term in (CKG.RelationPath, CKG.RelationHop):
+    for term in (CW.RelationPath, CW.RelationHop):
         assert not list(g.subjects(RDF.type, term))
-    for term in (CKG.relationDirection, CKG.relationLabel, CKG.pathLength,
-                 CKG.hop, CKG.hopIndex, CKG.hopRelation, CKG.hopDirection):
+    for term in (CW.relationDirection, CW.relationLabel, CW.pathLength,
+                 CW.hop, CW.hopIndex, CW.hopRelation, CW.hopDirection):
         assert not list(g.subject_objects(term)), f"{term} should no longer be written"
 
 
@@ -259,18 +271,18 @@ def test_to_rdf_writes_a_multi_hop_label_as_a_sparql_property_path():
     ocg = _ocg(max_hops=2)
     g = ocg.to_rdf()
 
-    paths = [(s, str(o)) for s, o in g.subject_objects(CKG.viaPath)]
-    assert paths, "max_hops=2 produced no ckg:viaPath"
+    paths = [(s, str(o)) for s, o in g.subject_objects(CW.viaPath)]
+    assert paths, "max_hops=2 produced no cw:viaPath"
     saw_multi = False
     for edge, text in paths:
-        assert isinstance(g.value(edge, CKG.viaPath), Literal)
+        assert isinstance(g.value(edge, CW.viaPath), Literal)
         hops = parse_property_path(text)
         saw_multi = saw_multi or len(hops) > 1
         for rel, direction in hops:
             assert direction in {"forward", "inverse"}
             # every step's relation is also listed flat on the edge, so a
             # "which edges use this property" query needs no path parsing
-            assert (edge, CKG.viaRelation, rel) in g
+            assert (edge, CW.viaRelation, rel) in g
         assert render_property_path(hops) == text   # the syntax round-trips
     assert saw_multi, "no multi-hop path in the fixture"
 
@@ -289,11 +301,11 @@ def test_to_rdf_records_curation_provenance():
     g = ocg.to_rdf()
 
     flag = Literal(True, datatype=XSD.boolean)
-    assert (ocg.edge_iri(*hand_drawn), CKG.manuallyAdded, flag) in g
+    assert (ocg.edge_iri(*hand_drawn), CW.manuallyAdded, flag) in g
     # A discovered edge gets no triple at all, not `false`.
     for (i, j) in ocg.edges():
         if (i, j) != hand_drawn:
-            assert g.value(ocg.edge_iri(i, j), CKG.manuallyAdded) is None
+            assert g.value(ocg.edge_iri(i, j), CW.manuallyAdded) is None
     assert set(g.objects(ocg.iri, PROV.wasDerivedFrom)) == {
         URIRef(f"{RUN_STEM}run-1"), URIRef(f"{RUN_STEM}run-2")}
 
@@ -313,8 +325,8 @@ def test_to_rdf_accumulates_into_a_given_graph():
     other.to_rdf(graph=g)
 
     assert len(g) > n_first
-    assert (ocg.iri, RDF.type, CKG.OntologicalCausalGraph) in g
-    assert (other.iri, RDF.type, CKG.OntologicalCausalGraph) in g
+    assert (ocg.iri, RDF.type, CW.OntologicalCausalGraph) in g
+    assert (other.iri, RDF.type, CW.OntologicalCausalGraph) in g
     # Node IRIs are global, so the two graphs join on the same node resources.
     assert ocg.node_iri(0) == other.node_iri(0)
 
@@ -342,9 +354,9 @@ def test_write_bundle_still_joins_methods_on_shared_nodes(tmp_path):
     g = write_bundle({"GES": a, "PC": b}, str(path))
 
     assert path.is_file()
-    assert len(list(g.subjects(RDF.type, CKG.OntologicalCausalGraph))) == 2
-    assert (a.node_iri(0), RDF.type, CKG.PropertyNode) in g
-    assert g.value(CKG.OntologicalCausalGraph, RDFS.comment) is not None  # vocabulary
+    assert len(list(g.subjects(RDF.type, CW.OntologicalCausalGraph))) == 2
+    assert (a.node_iri(0), RDF.type, CW.PropertyNode) in g
+    assert g.value(CW.OntologicalCausalGraph, RDFS.comment) is not None  # vocabulary
 
 
 # ---------------------------------------------------------------------- #
@@ -399,60 +411,60 @@ def test_from_rdf_still_reads_every_legacy_shape():
     """Turtle written before this vocabulary must keep loading — nothing regenerated it.
 
     Exercises all six superseded shapes at once: the ``rdf:List`` node order,
-    the ``ckg:parameters`` JSON literal, the split ``ckg:rangeClass`` /
-    ``ckg:rangeDatatype``, ``ckg:domainClass``, ``ckg:method`` and
-    ``ckg:constrained`` duplicated onto the graph, and reified
-    ``ckg:RelationPath`` / ``ckg:RelationHop`` resources.
+    the ``cw:parameters`` JSON literal, the split ``cw:rangeClass`` /
+    ``cw:rangeDatatype``, ``cw:domainClass``, ``cw:method`` and
+    ``cw:constrained`` duplicated onto the graph, and reified
+    ``cw:RelationPath`` / ``cw:RelationHop`` resources.
     """
     ocg = _ocg(max_hops=2)
     g = ocg.to_rdf()
 
-    # --- node order: ckg:hasNodeSlot -> rdf:List ------------------------- #
-    for slot in list(g.objects(ocg.iri, CKG.hasNodeSlot)):
-        g.remove((ocg.iri, CKG.hasNodeSlot, slot))
+    # --- node order: cw:hasNodeSlot -> rdf:List ------------------------- #
+    for slot in list(g.objects(ocg.iri, CW.hasNodeSlot)):
+        g.remove((ocg.iri, CW.hasNodeSlot, slot))
         g.remove((slot, None, None))
     node_list = Collection(g, None, [ocg.node_iri(k) for k in range(ocg.n)])
-    g.add((ocg.iri, CKG.nodeList, node_list.uri))
+    g.add((ocg.iri, CW.nodeList, node_list.uri))
 
     # --- parameters: resources -> one JSON literal ----------------------- #
-    for param in list(g.objects(ocg.run_iri, CKG.hasParameter)):
-        g.remove((ocg.run_iri, CKG.hasParameter, param))
+    for param in list(g.objects(ocg.run_iri, CW.hasParameter)):
+        g.remove((ocg.run_iri, CW.hasParameter, param))
         g.remove((param, None, None))
-    g.add((ocg.run_iri, CKG.parameters,
+    g.add((ocg.run_iri, CW.parameters,
            Literal('{"alpha": 0.05, "constrained": true}')))
 
-    # --- node terms: ckg:domain/ckg:range -> the old split terms --------- #
+    # --- node terms: cw:domain/cw:range -> the old split terms --------- #
     for k in range(ocg.n):
         node_iri = ocg.node_iri(k)
-        domain = g.value(node_iri, CKG.domain)
-        range_ = g.value(node_iri, CKG["range"])
-        kind = str(g.value(node_iri, CKG.nodeKind))
-        g.remove((node_iri, CKG.domain, None))
-        g.remove((node_iri, CKG["range"], None))
-        g.add((node_iri, CKG.domainClass, domain))
-        g.add((node_iri, CKG.rangeClass if kind == "object" else CKG.rangeDatatype,
+        domain = g.value(node_iri, CW.domain)
+        range_ = g.value(node_iri, CW["range"])
+        kind = str(g.value(node_iri, CW.nodeKind))
+        g.remove((node_iri, CW.domain, None))
+        g.remove((node_iri, CW["range"], None))
+        g.add((node_iri, CW.domainClass, domain))
+        g.add((node_iri, CW.rangeClass if kind == "object" else CW.rangeDatatype,
                range_))
 
     # --- run provenance: duplicated back onto the graph ------------------ #
-    g.remove((ocg.run_iri, CKG.method, None))
-    g.remove((ocg.run_iri, CKG.usedTopologicalConstraint, None))
-    g.add((ocg.iri, CKG.method, Literal("GES")))
-    g.add((ocg.iri, CKG.constrained, Literal(True, datatype=XSD.boolean)))
+    g.remove((ocg.run_iri, CW.method, None))
+    g.remove((ocg.run_iri, CW.usedTopologicalConstraint, None))
+    g.add((ocg.iri, CW.method, Literal("GES")))
+    g.add((ocg.iri, CW.constrained, Literal(True, datatype=XSD.boolean)))
 
     # --- relation paths: viaPath literal -> reified resources ------------ #
     downgraded = 0
-    for edge, text in list(g.subject_objects(CKG.viaPath)):
-        g.remove((edge, CKG.viaPath, text))
+    for edge, text in list(g.subject_objects(CW.viaPath)):
+        g.remove((edge, CW.viaPath, text))
         path = URIRef(f"{edge}/path/1")
-        g.add((edge, CKG.viaPath, path))
-        g.add((path, RDF.type, CKG.RelationPath))
+        g.add((edge, CW.viaPath, path))
+        g.add((path, RDF.type, CW.RelationPath))
         for index, (rel, direction) in enumerate(parse_property_path(str(text)), 1):
             hop = URIRef(f"{path}/hop/{index}")
-            g.add((path, CKG.hop, hop))
-            g.add((hop, RDF.type, CKG.RelationHop))
-            g.add((hop, CKG.hopIndex, Literal(index, datatype=XSD.integer)))
-            g.add((hop, CKG.hopRelation, rel))
-            g.add((hop, CKG.hopDirection, Literal(direction)))
+            g.add((path, CW.hop, hop))
+            g.add((hop, RDF.type, CW.RelationHop))
+            g.add((hop, CW.hopIndex, Literal(index, datatype=XSD.integer)))
+            g.add((hop, CW.hopRelation, rel))
+            g.add((hop, CW.hopDirection, Literal(direction)))
         downgraded += 1
     assert downgraded, "fixture produced no path to downgrade"
 
@@ -474,10 +486,10 @@ def test_from_rdf_still_reads_every_legacy_shape():
 def test_from_rdf_raises_when_neither_node_ordering_is_present():
     ocg = _ocg()
     g = ocg.to_rdf()
-    for slot in list(g.objects(ocg.iri, CKG.hasNodeSlot)):
-        g.remove((ocg.iri, CKG.hasNodeSlot, slot))
+    for slot in list(g.objects(ocg.iri, CW.hasNodeSlot)):
+        g.remove((ocg.iri, CW.hasNodeSlot, slot))
         g.remove((slot, None, None))
-    with pytest.raises(ValueError, match="ckg:hasNodeSlot"):
+    with pytest.raises(ValueError, match="cw:hasNodeSlot"):
         OntologicalCausalGraph.from_rdf(g)
 
 

@@ -13,7 +13,7 @@ import pytest
 pytest.importorskip("dowhy")
 pytest.importorskip("pgmpy")
 
-from causalkg.model import CausalModel  # noqa: E402
+from causalway.model import CausalModel  # noqa: E402
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCLC_TTL = os.path.join(_ROOT, "kgs", "ttls", "SCLC_patients.ttl")
@@ -46,7 +46,7 @@ def test_fit_produces_invertible_non_root_mechanisms(model):
 
 def test_all_columns_categorical_selects_pgmpy_exact_tier(model):
     # SCLC is entirely categorical, so backend="auto" should reach tier 1.
-    from causalkg.inference import _all_discrete
+    from causalway.inference import _all_discrete
     assert _all_discrete(model)
 
 

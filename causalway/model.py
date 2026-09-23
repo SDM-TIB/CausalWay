@@ -4,7 +4,7 @@ Implements Plan 2 §3.3: align the causal graph's nodes to the KG's
 materialised columns on node *identity* (``domain, prop, range``, not the
 display-level ``name``), infer a dtype per column, let ``gcm.auto`` pick a
 mechanism class, override every non-root categorical mechanism with
-:class:`~causalkg.mechanisms.InvertibleClassifierFCM` (E1), pre-validate
+:class:`~causalway.mechanisms.InvertibleClassifierFCM` (E1), pre-validate
 invertibility (gcm accepts a non-invertible mechanism silently and only fails
 later, deep inside ``compute_noise_from_data`` — see Plan 2 §1.2), then fit.
 """
@@ -39,7 +39,7 @@ from .nodes import PropertyNode, build_nodes
 from .ontology import OntologySchema
 from .result import OntologicalCausalGraph
 from .sources import CausalGraphSource, GraphSource, is_endpoint, load_ocg, resolve_schema
-from .vocab import CKG, MODEL_RUN_STEM, MODEL_STEM, PROV
+from .vocab import CW, MODEL_RUN_STEM, MODEL_STEM, PROV
 
 __all__ = ["ModelSpec", "CausalModel", "GRAPH_FILENAME"]
 
@@ -68,7 +68,7 @@ def _materialize_kg(schema: OntologySchema, *, include_object_properties: bool,
     ``build_nodes(include_object_properties=False)`` never builds an
     object-property node — that flag was meant to control whether a relation
     becomes a *value column*, but withholding the node also withholds its
-    join, since :func:`~causalkg.bgp.materialize` only joins classes through
+    join, since :func:`~causalway.bgp.materialize` only joins classes through
     object nodes it is actually given. A schema whose classes are only
     connected through such a relation then has no way to reach a second
     class's properties: every active class ends up in its own disconnected
@@ -81,13 +81,13 @@ def _materialize_kg(schema: OntologySchema, *, include_object_properties: bool,
     ran its own materialisation hand that curation straight through, so the
     fit re-runs the *same* SPARQL rather than a full-schema one of its own
     (Plan 3 §Preprocess revision 2 — the two axes are independent; see
-    :mod:`causalkg.bgp`'s module docstring). Left at ``None`` — every
+    :mod:`causalway.bgp`'s module docstring). Left at ``None`` — every
     non-service caller — the behaviour is exactly the paragraph above: every
     property materialised, every join intact.
 
     This matters beyond column agreement. ``Materialization.entity_ids`` is
     what makes a *counterfactual* entity-level at all: it is the only record
-    of which entity owns which cell, and both :func:`causalkg.entities.
+    of which entity owns which cell, and both :func:`causalway.entities.
     population_rows` and the unit builder read a fit's own ``spec.mat`` for
     it. Materialising a different join here than the one the user curated
     would resolve "this patient's rows" against a row set they never saw.
@@ -254,7 +254,7 @@ def _node_seeds(columns, random_state: Optional[int]) -> dict:
     offsets of one seed are not.
 
     ``random_state=None`` yields ``None`` for every node — an unseeded fit stays
-    unseeded, and :class:`~causalkg.mechanisms.InvertibleClassifierFCM` then
+    unseeded, and :class:`~causalway.mechanisms.InvertibleClassifierFCM` then
     behaves exactly as it did before mechanisms carried generators.
     """
     ordered = sorted(columns)
@@ -543,7 +543,7 @@ class CausalModel:
         With ``reload_data=True`` (default) the causal graph and KG are
         re-resolved from the provenance recorded in the manifest
         (``causal_graph_source`` / ``source_kg``), so the returned model can
-        answer :mod:`causalkg.inference` queries immediately — a query needs
+        answer :mod:`causalway.inference` queries immediately — a query needs
         ``spec.data`` (the prepared frame) and ``spec.ocg`` (for reach
         validation and node lookup), neither of which lives in ``scm.pkl``.
         Reloading fails softly: if the original source is unreachable (moved
@@ -670,7 +670,7 @@ class CausalModel:
         return ok
 
     # ------------------------------------------------------------------ #
-    # Prediction (thin delegation to causalkg.inference — kept out of this
+    # Prediction (thin delegation to causalway.inference — kept out of this
     # module so plain Plan 1 discovery use never imports pgmpy/scipy)
     # ------------------------------------------------------------------ #
     # Every one of these takes ``target`` as *either* a single node name or a
@@ -678,7 +678,7 @@ class CausalModel:
     # one ``Answer`` out; a list/tuple/set in, ``{node: Answer}`` out — and the
     # batch is answered off one shared computation rather than one per target,
     # so the answers cannot disagree with each other. See
-    # :mod:`causalkg.inference`.
+    # :mod:`causalway.inference`.
     def condition(self, target, evidence: dict, *, conditions: Optional[dict] = None,
                  backend: str = "auto", num_samples: int = 10_000):
         from .inference import condition as _condition
@@ -719,53 +719,22 @@ class CausalModel:
     # ------------------------------------------------------------------ #
     # RDF export — Layer A (Plan2 §6.2)
     # ------------------------------------------------------------------ #
-    def to_rdf(self, graph: Optional[Graph] = None) -> Graph:
-        """Serialise the fitted model (not the query/answer) as ``ckg:CausalModel``."""
-        g = Graph() if graph is None else graph
-        g.bind("ckg", CKG)
-        g.bind("prov", PROV)
+    def to_rdf(self, graph: Optional[Graph] = None, *,
+               with_vocabulary: bool = False,
+               workdir: Optional[str] = None) -> Graph:
+        """Serialise the fitted model (not the query/answer) as ``cw:CausalModel``.
 
-        model_iri = self.iri
-        run_iri = self.run_iri
-        gid = self.manifest.get("ocg_gid")
+        A thin wrapper over :func:`causalway.model_export.model_to_rdf`: the
+        shape of this export lives in ``model_mapping.rml.ttl``, not here.  The
+        hand-written version this replaced also emitted the legacy
+        ``cw:parameters`` JSON literal; the mapping emits ``cw:Parameter``
+        resources instead, the same way a discovery run's hyper-parameters have
+        been written since the RML export landed.
+        """
+        from .model_export import model_to_rdf
 
-        g.add((model_iri, RDF.type, CKG.CausalModel))
-        g.add((model_iri, RDF.type, PROV.Entity))
-        g.add((model_iri, RDFS.label, Literal(f"Causal model {self.model_id}")))
-        if gid:
-            g.add((model_iri, CKG.overGraph, URIRef(f"http://sdm-causalkg.org/graph/{gid}")))
-        source = self.manifest.get("source_kg", {})
-        if source.get("path"):
-            g.add((model_iri, CKG.trainedOn, Literal(source["path"])))
-        elif source.get("url"):
-            g.add((model_iri, CKG.trainedOn, Literal(source["url"])))
-        g.add((model_iri, CKG.trainingRows,
-              Literal(self.manifest.get("training_rows", 0), datatype=XSD.integer)))
-        g.add((model_iri, CKG.library, Literal("dowhy.gcm")))
-        g.add((model_iri, CKG.libraryVersion,
-              Literal(self.manifest.get("versions", {}).get("dowhy", "unknown"))))
-        g.add((model_iri, PROV.wasGeneratedBy, run_iri))
-
-        g.add((run_iri, RDF.type, CKG.ModelFitRun))
-        g.add((run_iri, RDF.type, PROV.Activity))
-        g.add((run_iri, PROV.endedAtTime,
-              Literal(self.manifest.get("fitted_at"), datatype=XSD.dateTime)))
-        g.add((run_iri, CKG.parameters, Literal(json.dumps({
-            "quality": self.manifest.get("quality"),
-            "categorical_counterfactual": self.manifest.get("categorical_counterfactual"),
-            "random_state": self.manifest.get("random_state"),
-        }, sort_keys=True))))
-
-        for _, row in self.mechanism_table().iterrows():
-            assign_iri = URIRef(f"{model_iri}/mechanism/{row['node']}")
-            g.add((model_iri, CKG.hasMechanism, assign_iri))
-            g.add((assign_iri, RDF.type, CKG.MechanismAssignment))
-            g.add((assign_iri, CKG.mechanismType, Literal(row["mechanism_type"])))
-            g.add((assign_iri, CKG.invertible, Literal(bool(row["invertible"]), datatype=XSD.boolean)))
-            if row["mechanism_type"] == "InvertibleClassifierFCM":
-                g.add((assign_iri, CKG.counterfactualCoupling, Literal("gumbel-max")))
-
-        return g
+        return model_to_rdf(self, graph=graph, with_vocabulary=with_vocabulary,
+                            workdir=workdir)
 
     @property
     def iri(self) -> URIRef:

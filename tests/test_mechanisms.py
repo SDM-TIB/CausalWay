@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from scipy.stats import chisquare
 
-from causalkg.mechanisms import InvertibleClassifierFCM
+from causalway.mechanisms import InvertibleClassifierFCM
 
 
 class _StubClassifier:

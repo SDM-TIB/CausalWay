@@ -1,4 +1,4 @@
-# RML mapping: counterfactual worlds JSON -> ckg: RDF (Plan 2 Layers B and C).
+# RML mapping: counterfactual worlds JSON -> cw: RDF (Plan 2 Layers B and C).
 #
 # The companion of `ocg_mapping.rml.ttl`, and subject to exactly the same
 # SDM-RDFizer 4.7.5 constraints — read that file's header first; the reasoning
@@ -12,37 +12,37 @@
 #
 #   1. **The query IRI is the world.**  Plan 2 §6.0 principle 1: a world is
 #      identified by the query that defines it, so there is no separate world
-#      resource with nothing of its own to say.  The set of `ckg:hasIntervention`
-#      hanging off one `ckg:CounterfactualQuery` *is* the joint intervention.
+#      resource with nothing of its own to say.  The set of `cw:hasIntervention`
+#      hanging off one `cw:CounterfactualQuery` *is* the joint intervention.
 #
 #   2. **One estimate per non-intervened node.**  A world is only interesting
 #      because it says what else would have been different, so there is one
-#      `ckg:CounterfactualEstimate` per node rather than one for a nominated
+#      `cw:CounterfactualEstimate` per node rather than one for a nominated
 #      target.  Intervened nodes are excluded: their value is the treatment,
-#      already stated once as `ckg:setValue`, and repeating it as a prediction
+#      already stated once as `cw:setValue`, and repeating it as a prediction
 #      would dress an assumption up as a result.
 #
-#   3. **`ckg:factualValue` sits beside `ckg:predictedValue`.**  A counterfactual
+#   3. **`cw:factualValue` sits beside `cw:predictedValue`.**  A counterfactual
 #      without its baseline is unreadable: "dosage would have been 40" means
 #      nothing until "dosage was 25" is beside it.  The contrast between them is
 #      deliberately *not* minted as a term — it is a subtraction.
 #
 #   4. **No distribution sub-tree.**  An earlier version wrote a
-#      `ckg:CategoricalDistribution` with one `ckg:Outcome` child per level:
+#      `cw:CategoricalDistribution` with one `cw:Outcome` child per level:
 #      `1 + k` extra subjects per node per world, dominating the document to
 #      answer a question nobody asked.  What survives is one triple,
-#      `ckg:probability`, carrying the mass of the arg-max level that
-#      `ckg:predictedValue` reports.  Continuous nodes get `ckg:standardDeviation`
-#      instead — read only together with the world's `ckg:rowCount`, which says
+#      `cw:probability`, carrying the mass of the arg-max level that
+#      `cw:predictedValue` reports.  Continuous nodes get `cw:standardDeviation`
+#      instead — read only together with the world's `cw:rowCount`, which says
 #      whether flat-join row duplication is folded into that spread.
 #
-#   5. **`entity ckg:hasQuery world` is written when there is an entity.**  This
+#   5. **`entity cw:hasQuery world` is written when there is an entity.**  This
 #      is the §6.1 annotation form: it adds no `entity property value` triple, so
 #      merging this document into the source KG contradicts nothing in it, while
 #      still letting a consumer start from a patient and find every hypothetical
 #      asked about them.  A *hypothetical* unit — observed values supplied by
 #      hand, no resource behind them — simply carries no `entity` key, and both
-#      `ckg:aboutEntity` and this map fall silent for it.  Projecting the
+#      `cw:aboutEntity` and this map fall silent for it.  Projecting the
 #      hypothetical values as real triples needs `GRAPH <world> { ... }` (§6.8)
 #      and therefore a quad format; Turtle cannot express it and this mapping
 #      does not attempt it.
@@ -64,7 +64,7 @@
 #     against 4.7.5.
 #
 # Hence `estimates` / `estimates_typed` / `estimates_object` (and the same three
-# for interventions).  `causalkg.cf_export` guarantees every row of a `*_typed`
+# for interventions).  `causalway.cf_export` guarantees every row of a `*_typed`
 # array carries a `datatype`, and that a node's counterfactual and factual values
 # share one datatype — they are the same variable, so typing one `xsd:integer`
 # and the other `xsd:double` would claim they are different kinds of quantity.
@@ -74,9 +74,9 @@
 # fatal.
 #
 # Run diagnostics (sample counts, effective sample size, the JSON blob under
-# `ckg:diagnostics`) are **not** exported. §6.6 keeps only `ckg:computedAt`, and
+# `cw:diagnostics`) are **not** exported. §6.6 keeps only `cw:computedAt`, and
 # a JSON literal could not survive the engine's quote rewriting anyway. The
-# noise coupling and `ckg:randomSeed` *are* kept, because they are what make the
+# noise coupling and `cw:randomSeed` *are* kept, because they are what make the
 # number reproducible rather than merely explained.
 
 @prefix rr:   <http://www.w3.org/ns/r2rml#> .
@@ -84,7 +84,7 @@
 @prefix ql:   <http://semweb.mmlab.be/ns/ql#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
-@prefix ckg:  <http://sdm-causalkg.org/> .
+@prefix cw:  <http://sdm-causalway.org/> .
 
 
 # ------------------------------------------------------------------ #
@@ -98,35 +98,35 @@
         rml:iterator "$.worlds[*]"
     ] ;
     rr:subjectMap [
-        rr:template "http://sdm-causalkg.org/query/{world_key}" ;
-        rr:class ckg:CounterfactualQuery
+        rr:template "http://sdm-causalway.org/query/{world_key}" ;
+        rr:class cw:CounterfactualQuery
     ] ;
     rr:predicateObjectMap [
         rr:predicate rdfs:label ;
         rr:objectMap [ rml:reference "label" ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:aboutEntity ;
+        rr:predicate cw:aboutEntity ;
         rr:objectMap [ rr:template "{entity}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:usedModel ;
+        rr:predicate cw:usedModel ;
         rr:objectMap [ rr:template "{model_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:computedAt ;
+        rr:predicate cw:computedAt ;
         rr:objectMap [ rml:reference "computed_at" ; rr:datatype xsd:dateTime ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:counterfactualCoupling ;
+        rr:predicate cw:counterfactualCoupling ;
         rr:objectMap [ rml:reference "coupling" ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:rowCount ;
+        rr:predicate cw:rowCount ;
         rr:objectMap [ rml:reference "row_count" ; rr:datatype xsd:integer ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:randomSeed ;
+        rr:predicate cw:randomSeed ;
         rr:objectMap [ rml:reference "random_seed" ; rr:datatype xsd:integer ]
     ] .
 
@@ -155,7 +155,7 @@
     ] ;
     rr:subjectMap [ rml:reference "entity" ; rr:termType rr:IRI ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:hasQuery ;
+        rr:predicate cw:hasQuery ;
         rr:objectMap [ rr:template "{world_iri}" ; rr:termType rr:IRI ]
     ] .
 
@@ -165,7 +165,7 @@
 # content (Plan 2 §6.3), so two worlds applying the same do() to the same
 # unit share one resource rather than duplicating it.
 #
-# Three maps, one per value form; everything but `ckg:setValue` is identical
+# Three maps, one per value form; everything but `cw:setValue` is identical
 # between them, and that repetition is the price of the engine's per-map
 # term-type and datatype binding.
 # ------------------------------------------------------------------ #
@@ -177,23 +177,23 @@
         rml:iterator "$.interventions[*]"
     ] ;
     rr:subjectMap [
-        rr:template "http://sdm-causalkg.org/intervention/{intervention_key}" ;
-        rr:class ckg:Intervention
+        rr:template "http://sdm-causalway.org/intervention/{intervention_key}" ;
+        rr:class cw:Intervention
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onNode ;
+        rr:predicate cw:onNode ;
         rr:objectMap [ rr:template "{node_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onProperty ;
+        rr:predicate cw:onProperty ;
         rr:objectMap [ rr:template "{property}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onEntity ;
+        rr:predicate cw:onEntity ;
         rr:objectMap [ rr:template "{entity}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:setValue ;
+        rr:predicate cw:setValue ;
         rr:objectMap [ rml:reference "value" ]
     ] .
 
@@ -205,23 +205,23 @@
         rml:iterator "$.interventions_typed[*]"
     ] ;
     rr:subjectMap [
-        rr:template "http://sdm-causalkg.org/intervention/{intervention_key}" ;
-        rr:class ckg:Intervention
+        rr:template "http://sdm-causalway.org/intervention/{intervention_key}" ;
+        rr:class cw:Intervention
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onNode ;
+        rr:predicate cw:onNode ;
         rr:objectMap [ rr:template "{node_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onProperty ;
+        rr:predicate cw:onProperty ;
         rr:objectMap [ rr:template "{property}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onEntity ;
+        rr:predicate cw:onEntity ;
         rr:objectMap [ rr:template "{entity}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:setValue ;
+        rr:predicate cw:setValue ;
         rr:objectMap [ rml:reference "value" ; rml:datatypeMap [ rml:template "{datatype}" ] ]
     ] .
 
@@ -235,23 +235,23 @@
         rml:iterator "$.interventions_object[*]"
     ] ;
     rr:subjectMap [
-        rr:template "http://sdm-causalkg.org/intervention/{intervention_key}" ;
-        rr:class ckg:Intervention
+        rr:template "http://sdm-causalway.org/intervention/{intervention_key}" ;
+        rr:class cw:Intervention
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onNode ;
+        rr:predicate cw:onNode ;
         rr:objectMap [ rr:template "{node_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onProperty ;
+        rr:predicate cw:onProperty ;
         rr:objectMap [ rr:template "{property}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onEntity ;
+        rr:predicate cw:onEntity ;
         rr:objectMap [ rr:template "{entity}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:setValue ;
+        rr:predicate cw:setValue ;
         rr:objectMap [ rr:template "{value_iri}" ; rr:termType rr:IRI ]
     ] .
 
@@ -264,9 +264,9 @@
         rml:referenceFormulation ql:JSONPath ;
         rml:iterator "$.interventions[*]"
     ] ;
-    rr:subjectMap [ rr:template "http://sdm-causalkg.org/query/{world_key}" ] ;
+    rr:subjectMap [ rr:template "http://sdm-causalway.org/query/{world_key}" ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:hasIntervention ;
+        rr:predicate cw:hasIntervention ;
         rr:objectMap [ rr:template "{intervention_iri}" ; rr:termType rr:IRI ]
     ] .
 
@@ -277,9 +277,9 @@
         rml:referenceFormulation ql:JSONPath ;
         rml:iterator "$.interventions_typed[*]"
     ] ;
-    rr:subjectMap [ rr:template "http://sdm-causalkg.org/query/{world_key}" ] ;
+    rr:subjectMap [ rr:template "http://sdm-causalway.org/query/{world_key}" ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:hasIntervention ;
+        rr:predicate cw:hasIntervention ;
         rr:objectMap [ rr:template "{intervention_iri}" ; rr:termType rr:IRI ]
     ] .
 
@@ -290,9 +290,9 @@
         rml:referenceFormulation ql:JSONPath ;
         rml:iterator "$.interventions_object[*]"
     ] ;
-    rr:subjectMap [ rr:template "http://sdm-causalkg.org/query/{world_key}" ] ;
+    rr:subjectMap [ rr:template "http://sdm-causalway.org/query/{world_key}" ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:hasIntervention ;
+        rr:predicate cw:hasIntervention ;
         rr:objectMap [ rr:template "{intervention_iri}" ; rr:termType rr:IRI ]
     ] .
 
@@ -309,39 +309,39 @@
         rml:iterator "$.estimates[*]"
     ] ;
     rr:subjectMap [
-        rr:template "http://sdm-causalkg.org/answer/{world_key}/{node_key}" ;
-        rr:class ckg:CounterfactualEstimate
+        rr:template "http://sdm-causalway.org/answer/{world_key}/{node_key}" ;
+        rr:class cw:CounterfactualEstimate
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:forQuery ;
+        rr:predicate cw:forQuery ;
         rr:objectMap [ rr:template "{world_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onNode ;
+        rr:predicate cw:onNode ;
         rr:objectMap [ rr:template "{node_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onProperty ;
+        rr:predicate cw:onProperty ;
         rr:objectMap [ rr:template "{property}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onEntity ;
+        rr:predicate cw:onEntity ;
         rr:objectMap [ rr:template "{entity}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:predictedValue ;
+        rr:predicate cw:predictedValue ;
         rr:objectMap [ rml:reference "value" ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:factualValue ;
+        rr:predicate cw:factualValue ;
         rr:objectMap [ rml:reference "factual" ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:probability ;
+        rr:predicate cw:probability ;
         rr:objectMap [ rml:reference "probability" ; rr:datatype xsd:double ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:standardDeviation ;
+        rr:predicate cw:standardDeviation ;
         rr:objectMap [ rml:reference "std" ; rr:datatype xsd:double ]
     ] .
 
@@ -353,45 +353,45 @@
         rml:iterator "$.estimates_typed[*]"
     ] ;
     rr:subjectMap [
-        rr:template "http://sdm-causalkg.org/answer/{world_key}/{node_key}" ;
-        rr:class ckg:CounterfactualEstimate
+        rr:template "http://sdm-causalway.org/answer/{world_key}/{node_key}" ;
+        rr:class cw:CounterfactualEstimate
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:forQuery ;
+        rr:predicate cw:forQuery ;
         rr:objectMap [ rr:template "{world_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onNode ;
+        rr:predicate cw:onNode ;
         rr:objectMap [ rr:template "{node_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onProperty ;
+        rr:predicate cw:onProperty ;
         rr:objectMap [ rr:template "{property}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onEntity ;
+        rr:predicate cw:onEntity ;
         rr:objectMap [ rr:template "{entity}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:predictedValue ;
+        rr:predicate cw:predictedValue ;
         rr:objectMap [ rml:reference "value" ; rml:datatypeMap [ rml:template "{datatype}" ] ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:factualValue ;
+        rr:predicate cw:factualValue ;
         rr:objectMap [ rml:reference "factual" ; rml:datatypeMap [ rml:template "{datatype}" ] ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:probability ;
+        rr:predicate cw:probability ;
         rr:objectMap [ rml:reference "probability" ; rr:datatype xsd:double ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:standardDeviation ;
+        rr:predicate cw:standardDeviation ;
         rr:objectMap [ rml:reference "std" ; rr:datatype xsd:double ]
     ] .
 
 # An object-typed causal variable: both values are resources of the source KG.
-# Such a node is categorical by construction, so it carries `ckg:probability`
-# and never `ckg:standardDeviation`.
+# Such a node is categorical by construction, so it carries `cw:probability`
+# and never `cw:standardDeviation`.
 <#EstimateObjectMap>
     a rr:TriplesMap ;
     rml:logicalSource [
@@ -400,34 +400,34 @@
         rml:iterator "$.estimates_object[*]"
     ] ;
     rr:subjectMap [
-        rr:template "http://sdm-causalkg.org/answer/{world_key}/{node_key}" ;
-        rr:class ckg:CounterfactualEstimate
+        rr:template "http://sdm-causalway.org/answer/{world_key}/{node_key}" ;
+        rr:class cw:CounterfactualEstimate
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:forQuery ;
+        rr:predicate cw:forQuery ;
         rr:objectMap [ rr:template "{world_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onNode ;
+        rr:predicate cw:onNode ;
         rr:objectMap [ rr:template "{node_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onProperty ;
+        rr:predicate cw:onProperty ;
         rr:objectMap [ rr:template "{property}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:onEntity ;
+        rr:predicate cw:onEntity ;
         rr:objectMap [ rr:template "{entity}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:predictedValue ;
+        rr:predicate cw:predictedValue ;
         rr:objectMap [ rr:template "{value_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:factualValue ;
+        rr:predicate cw:factualValue ;
         rr:objectMap [ rr:template "{factual_iri}" ; rr:termType rr:IRI ]
     ] ;
     rr:predicateObjectMap [
-        rr:predicate ckg:probability ;
+        rr:predicate cw:probability ;
         rr:objectMap [ rml:reference "probability" ; rr:datatype xsd:double ]
     ] .

@@ -62,7 +62,21 @@ __all__ = [
 #: misread. Not a version of the service — a project zip from a service that
 #: has since grown three new panels still restores fine, it just leaves the new
 #: panels empty, which is what `notes` is for.
-BUNDLE_VERSION = "1"
+#:
+#: 2 — the CausalKG → CausalWay rename. A version-1 bundle is unreadable here
+#: for a reason no descriptor check would catch on its own: its ``scm.pkl`` is
+#: a joblib pickle whose mechanism classes are recorded under their old module
+#: path (``causalkg.mechanisms.InvertibleClassifierFCM``), and that module no
+#: longer exists, so ``joblib.load`` would die with a bare ModuleNotFoundError
+#: somewhere deep in the restore. We deliberately do *not* ship a
+#: ``sys.modules["causalkg"]`` alias to paper over it: aliasing a name that
+#: exists nowhere else in the project is permanent cruft in exchange for
+#: reading artifacts produced by a pre-release version. Fail early, say why.
+BUNDLE_VERSION = "2"
+
+#: What ``kind`` said before the rename. Recognised only to produce a better
+#: error than "unexpected bundle kind".
+_PRE_RENAME_KIND = "causalkg-project"
 
 MODEL_DIR = "model"
 DESCRIPTOR = "bundle.json"
@@ -79,7 +93,7 @@ def bundle_descriptor(p, *, has_model: bool, versions: dict) -> dict:
     """The small file a reader looks at *before* unpacking anything else."""
     return {
         "bundle_version": BUNDLE_VERSION,
-        "kind": "causalkg-project",
+        "kind": "causalway-project",
         "project": {"id": p.id, "name": p.name, "created_at": p.created_at},
         "has_model": has_model,
         # What produced it. Checked on import against what is installed, because
@@ -172,13 +186,21 @@ def read_bundle(data: bytes, *, installed: dict, strict: bool = True) -> LoadedB
         if "project.json" not in files:
             raise BundleError(
                 "This zip has neither bundle.json nor project.json, so it is not a "
-                "CausalKG export. Export a project from the Export menu to get one."
+                "CausalWay export. Export a project from the Export menu to get one."
             )
-        descriptor = {"bundle_version": "0", "kind": "causalkg-project",
+        descriptor = {"bundle_version": "0", "kind": "causalway-project",
                       "has_model": False, "versions": {}}
     bundle.descriptor = descriptor
 
-    if descriptor.get("kind") != "causalkg-project":
+    if descriptor.get("kind") == _PRE_RENAME_KIND:
+        raise BundleError(
+            "This bundle was exported before the CausalKG → CausalWay rename. Its "
+            "vocabulary IRIs are in the retired http://sdm-causalkg.org/ namespace "
+            "and, if it carries a model, its pickle names modules that no longer "
+            "exist. It cannot be restored here — re-run discovery and fitting on the "
+            "source KG to produce a current bundle."
+        )
+    if descriptor.get("kind") != "causalway-project":
         raise BundleError(f"Unexpected bundle kind {descriptor.get('kind')!r}.")
 
     version = str(descriptor.get("bundle_version", "0"))
@@ -245,7 +267,7 @@ def restore_into(bundle: LoadedBundle, p, *, load_model) -> list[str]:
 
     # The curated graph is read from `project.json`, not from
     # `curated_graph.json`. The latter is the RML document `to_json()` produces
-    # — a full ckg:OntologicalCausalGraph with node slots, reified edges and a
+    # — a full cw:OntologicalCausalGraph with node slots, reified edges and a
     # discovery run — and reversing it would mean writing an inverse of the
     # export that has to be kept in step with `ocg_mapping.rml.ttl` forever.
     # The two selection lists are the actual UI state, so they travel as

@@ -1,7 +1,7 @@
 """Row <-> entity resolution and scope aggregation (Plan 2 §5.1).
 
 ``Materialization.entity_ids`` already holds one column per class variable,
-aligned by row index (``causalkg/bgp.py``), so everything here is lookup, not
+aligned by row index (``causalway/bgp.py``), so everything here is lookup, not
 re-querying: an entity resolves to the set of flat-join rows it appears in,
 and an entity-level answer is the (mode / mean) aggregate of a per-row
 prediction over that row set.

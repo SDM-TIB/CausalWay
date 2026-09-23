@@ -1,14 +1,14 @@
-"""Tests for row <-> entity resolution (causalkg.entities), over the SCLC materialisation."""
+"""Tests for row <-> entity resolution (causalway.entities), over the SCLC materialisation."""
 
 import os
 
 import pandas as pd
 import pytest
 
-from causalkg.bgp import materialize
-from causalkg.entities import aggregate, entity_of, population_rows, rows_for_entity
-from causalkg.nodes import build_nodes
-from causalkg.ontology import OntologySchema
+from causalway.bgp import materialize
+from causalway.entities import aggregate, entity_of, population_rows, rows_for_entity
+from causalway.nodes import build_nodes
+from causalway.ontology import OntologySchema
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCLC_TTL = os.path.join(_ROOT, "kgs", "ttls", "SCLC_patients.ttl")

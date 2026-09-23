@@ -30,7 +30,7 @@ def _zip(files: dict) -> bytes:
 def _descriptor(**over) -> dict:
     base = {
         "bundle_version": bundle.BUNDLE_VERSION,
-        "kind": "causalkg-project",
+        "kind": "causalway-project",
         "has_model": False,
         "versions": dict(INSTALLED),
         "source_kg": {"sha256": "a" * 64},
@@ -58,8 +58,8 @@ def test_a_zip_from_before_bundles_existed_still_imports():
     assert loaded.json("project.json")["name"] == "old"
 
 
-def test_something_that_is_not_a_causalkg_export_is_refused():
-    with pytest.raises(bundle.BundleError, match="not a CausalKG export"):
+def test_something_that_is_not_a_causalway_export_is_refused():
+    with pytest.raises(bundle.BundleError, match="not a CausalWay export"):
         bundle.read_bundle(_zip({"notes.txt": "hello"}), installed=INSTALLED)
 
 

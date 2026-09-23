@@ -20,13 +20,13 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from causalkg.ontology import OntologySchema
-from causalkg.nodes import build_nodes
-from causalkg.constraints import EdgeConstraint
-from causalkg.bgp import Materialization, materialize
-from causalkg.encoding import drop_constant_columns, to_discrete_frame, to_numeric_frame
-from causalkg.llm_meta import build_var_meta, build_pair_meta, build_domain_str
-from causalkg.result import OntologicalCausalGraph, write_bundle
+from causalway.ontology import OntologySchema
+from causalway.nodes import build_nodes
+from causalway.constraints import EdgeConstraint
+from causalway.bgp import Materialization, materialize
+from causalway.encoding import drop_constant_columns, to_discrete_frame, to_numeric_frame
+from causalway.llm_meta import build_var_meta, build_pair_meta, build_domain_str
+from causalway.result import OntologicalCausalGraph, write_bundle
 from algs.discovery_alg import CausalDiscovery
 from algs.ges_prior.learn_bn import discover_structure, estimate_priors
 from algs.ges_prior.llm_call import LLMClient
@@ -195,8 +195,8 @@ def to_ocg(adj: np.ndarray, ctx: DiscoveryContext, constrained: bool,
            source: Optional[str] = None) -> OntologicalCausalGraph:
     """Wrap an adjacency matrix into an :class:`OntologicalCausalGraph`.
 
-    ``method``/``params``/``source`` become the ``ckg:DiscoveryRun`` provenance
-    in the Turtle export; ``weights`` becomes ``ckg:weight`` on each edge.
+    ``method``/``params``/``source`` become the ``cw:DiscoveryRun`` provenance
+    in the Turtle export; ``weights`` becomes ``cw:weight`` on each edge.
 
     The constraint is always ``constraint_kept``: every run — constrained or
     not — is fitted on the kept columns, so that is the only node set whose

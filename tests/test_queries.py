@@ -4,13 +4,13 @@ import numpy as np
 import pytest
 from rdflib import Namespace, URIRef
 
-from causalkg.constraints import EdgeConstraint
-from causalkg.nodes import PropertyNode
-from causalkg.queries import (
+from causalway.constraints import EdgeConstraint
+from causalway.nodes import PropertyNode
+from causalway.queries import (
     Answer, Condition, Intervention, Query, answer_iri, intervention_iri,
     load_queries, query_iri, store_query, validate_query,
 )
-from causalkg.result import OntologicalCausalGraph
+from causalway.result import OntologicalCausalGraph
 
 EX = Namespace("http://example.org/")
 
@@ -49,7 +49,7 @@ class _FakeModel:
 
     @property
     def iri(self):
-        return URIRef(f"http://sdm-causalkg.org/model/{self._model_id}")
+        return URIRef(f"http://sdm-causalway.org/model/{self._model_id}")
 
 
 def test_validate_query_accepts_direct_parent():

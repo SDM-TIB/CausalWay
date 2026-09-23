@@ -8,32 +8,32 @@ is that the JSON-to-triples contract lives in one declarative, standard RML
 file that a reviewer can read (and that a non-Python consumer can run against
 the same JSON) instead of being spread over a hundred ``g.add(...)`` calls.
 
-Three properties of SDM-RDFizer 4.7.5 shaped both the JSON and the ckg: terms
+Three properties of SDM-RDFizer 4.7.5 shaped both the JSON and the cw: terms
 it produces; the mapping file documents them at length, and two of them are
 visible from Python:
 
 * **The ordered node layout is no longer an ``rdf:List``.**  RML's collection
-  extension is parsed but produces nothing, so ``ckg:nodeList`` is replaced by
-  ``ckg:NodeSlot`` resources carrying an explicit ``ckg:slotIndex``.
+  extension is parsed but produces nothing, so ``cw:nodeList`` is replaced by
+  ``cw:NodeSlot`` resources carrying an explicit ``cw:slotIndex``.
   :meth:`~OntologicalCausalGraph.from_rdf` still reads the legacy list, so
   Turtle written before this change (everything under ``results/``) keeps
   loading.
 * **The run's hyper-parameters are resources, not a JSON literal.**  Both ``"``
   and ``'`` are rewritten to ``\\'`` in any literal the engine emits, without a
-  way back — and a JSON object is nothing but double quotes.  ``ckg:parameters``
-  is therefore superseded by ``ckg:hasParameter`` → ``ckg:parameterName`` /
-  ``ckg:parameterValue`` / ``ckg:parameterKind``.  Any *other* literal holding a
+  way back — and a JSON object is nothing but double quotes.  ``cw:parameters``
+  is therefore superseded by ``cw:hasParameter`` → ``cw:parameterName`` /
+  ``cw:parameterValue`` / ``cw:parameterKind``.  Any *other* literal holding a
   quote makes :meth:`~OntologicalCausalGraph.to_rdf` raise rather than write a
   silently corrupted one; no property or class local name in this project's
   schemas contains one.
 
 A third shaped the vocabulary rather than the JSON: **there is no ordered
-collection**, so an edge's multi-hop relation label is one ``ckg:viaPath``
+collection**, so an edge's multi-hop relation label is one ``cw:viaPath``
 literal in SPARQL 1.1 property-path syntax (``^<a>/<b>``) rather than a
-``ckg:RelationPath`` of reified hops.  ``from_rdf`` reads both.
+``cw:RelationPath`` of reified hops.  ``from_rdf`` reads both.
 
 The cost is that ``to_rdf`` spawns a subprocess (~1 s, see
-:mod:`causalkg.rdfizer`) and touches a temporary directory, where it used to be
+:mod:`causalway.rdfizer`) and touches a temporary directory, where it used to be
 pure in-memory rdflib.  It is an
 export path, called once per result, so that is paid gladly; ``to_json`` is
 free and is the right thing to call in a loop.
@@ -59,12 +59,12 @@ from ._util import local_name
 from .constraints import EPSILON, EdgeConstraint, _is_hop, render_label
 from .nodes import PropertyNode, _with_name
 from .rdfizer import check_quote_free, materialise
-from .vocab import CKG, GRAPH_STEM, NODE_STEM, PROV, RUN_STEM, vocabulary
+from .vocab import CW, GRAPH_STEM, NODE_STEM, PROV, RUN_STEM, vocabulary
 
 __all__ = [
     "OntologicalCausalGraph", "write_bundle", "vocabulary", "RML_MAPPING_PATH",
     "render_property_path", "parse_property_path",
-    "CKG", "PROV", "NODE_STEM", "GRAPH_STEM", "RUN_STEM",
+    "CW", "PROV", "NODE_STEM", "GRAPH_STEM", "RUN_STEM",
 ]
 
 #: The RML mapping that defines the JSON -> RDF contract.  Ships next to this
@@ -83,11 +83,17 @@ def _param_entry(name: str, value) -> tuple:
     """Render one hyper-parameter as the ``(kind, text)`` pair the RDF carries.
 
     Typing is explicit because RML fixes ``rr:datatype`` per predicate-object
-    map, not per record: one ``ckg:parameterValue`` predicate has to serve an
+    map, not per record: one ``cw:parameterValue`` predicate has to serve an
     ``alpha=0.05`` and a ``constrained=True`` alike, so the type travels
-    alongside as ``ckg:parameterKind`` and :meth:`_params_from_rdf` inverts it.
+    alongside as ``cw:parameterKind`` and :meth:`_params_from_rdf` inverts it.
     ``bool`` is tested before ``int`` — in Python ``True`` *is* an ``int``.
+    numpy scalars are unwrapped first: ``np.bool_`` is not a ``bool`` and
+    ``np.int64`` not an ``int``, so a flag read back off a pandas index would
+    otherwise fall through to the JSON branch as the quoted text ``"True"``,
+    which :func:`~causalway.rdfizer.check_quote_free` then refuses.
     """
+    if isinstance(value, np.generic):
+        value = value.item()
     if value is None:
         return "null", ""
     if isinstance(value, bool):
@@ -140,8 +146,8 @@ def render_property_path(hops) -> str:
     ``^<http://.../treatedAt>/<http://.../receives>`` — ``^`` is the standard
     inverse-path operator and ``/`` the sequence operator, so the literal is
     both the exact machine-readable label *and* something that can be pasted
-    into a SPARQL query as-is.  This replaces the ``ckg:RelationPath`` /
-    ``ckg:RelationHop`` resources and their five properties: those existed only
+    into a SPARQL query as-is.  This replaces the ``cw:RelationPath`` /
+    ``cw:RelationHop`` resources and their five properties: those existed only
     to keep hop order and direction, which the operators already encode.
     Contains no quote, so SDM-RDFizer carries it intact.
     """
@@ -181,7 +187,7 @@ def parse_property_path(text: str) -> list:
         pos = match.end()
     if not hops or pos != len(text):
         raise ValueError(
-            f"Not a ckg:viaPath this project writes: {text!r}. Expected steps of the "
+            f"Not a cw:viaPath this project writes: {text!r}. Expected steps of the "
             "form '<iri>' or '^<iri>' joined by '/', with no grouping, alternation "
             "or modifiers."
         )
@@ -191,35 +197,35 @@ def parse_property_path(text: str) -> list:
 def _labels_from_edge(graph: Graph, edge: URIRef) -> list:
     """Rebuild an edge's ``edge_labels`` entry from its reified RDF form.
 
-    ``ckg:viaPath`` carries the ordered, directed label exactly; ``ckg:viaRelation``
+    ``cw:viaPath`` carries the ordered, directed label exactly; ``cw:viaRelation``
     contributes any relation no path covers, which by construction is a plain
-    forward hop (or ``ckg:epsilon``).  Legacy Turtle whose paths are reified as
-    ``ckg:RelationPath``/``ckg:RelationHop`` resources is read too, so everything
+    forward hop (or ``cw:epsilon``).  Legacy Turtle whose paths are reified as
+    ``cw:RelationPath``/``cw:RelationHop`` resources is read too, so everything
     under ``results/`` keeps loading.
     """
     labels: list = []
     covered_rels = set()
 
-    for path in graph.objects(edge, CKG.viaPath):
+    for path in graph.objects(edge, CW.viaPath):
         if isinstance(path, Literal):
             hops = parse_property_path(str(path))
-        else:                                   # legacy reified ckg:RelationPath
+        else:                                   # legacy reified cw:RelationPath
             hops = [
-                (graph.value(hop, CKG.hopRelation),
-                 str(graph.value(hop, CKG.hopDirection)))
-                for hop in sorted(graph.objects(path, CKG.hop),
-                                  key=lambda h: int(graph.value(h, CKG.hopIndex)))
+                (graph.value(hop, CW.hopRelation),
+                 str(graph.value(hop, CW.hopDirection)))
+                for hop in sorted(graph.objects(path, CW.hop),
+                                  key=lambda h: int(graph.value(h, CW.hopIndex)))
             ]
         if not hops:
             continue
         covered_rels.update(rel for rel, _ in hops)
         labels.append(hops[0] if len(hops) == 1 else tuple(hops))
 
-    # Legacy only: a single-hop inverse label used to be a flat ckg:viaRelation
-    # plus a separate ckg:relationDirection. Current exports put it in viaPath.
-    directions = list(graph.objects(edge, CKG.relationDirection))
+    # Legacy only: a single-hop inverse label used to be a flat cw:viaRelation
+    # plus a separate cw:relationDirection. Current exports put it in viaPath.
+    directions = list(graph.objects(edge, CW.relationDirection))
     fallback_direction = str(directions[0]) if directions else "forward"
-    for rel in graph.objects(edge, CKG.viaRelation):
+    for rel in graph.objects(edge, CW.viaRelation):
         if rel in covered_rels:
             continue
         labels.append((EPSILON, "epsilon") if rel == EPSILON
@@ -253,11 +259,11 @@ class OntologicalCausalGraph:
     #: ``{(i, j), ...}`` — edges a human added during curation rather than a
     #: method proposing them.  A curated graph that cannot say which edges came
     #: from the analyst is not reproducible provenance, so this rides along and
-    #: becomes ``ckg:manuallyAdded`` on the edge.
+    #: becomes ``cw:manuallyAdded`` on the edge.
     manual_edges: set = field(default_factory=set)
 
     #: IRIs (or ids) this graph was derived from — the contributing
-    #: ``ckg:DiscoveryRun``s of a curated selection.  Exported as
+    #: ``cw:DiscoveryRun``s of a curated selection.  Exported as
     #: ``prov:wasDerivedFrom`` on the graph.
     derived_from: list = field(default_factory=list)
 
@@ -280,7 +286,7 @@ class OntologicalCausalGraph:
         ``weights`` is the method's ``(n, n)`` weight matrix (LiNGAM/NOTEARS/
         DAGMA/DAG-GNN coefficients; 1.0 for the constraint- and score-based
         methods).  The remaining arguments are provenance and end up on the
-        ``ckg:DiscoveryRun`` in the Turtle export.
+        ``cw:DiscoveryRun`` in the Turtle export.
 
         ``manual_edges`` and ``derived_from`` describe a *curated* graph: which
         ``(i, j)`` pairs the analyst added by hand, and which runs the selection
@@ -308,35 +314,42 @@ class OntologicalCausalGraph:
                  method: Optional[str] = None) -> "OntologicalCausalGraph":
         """Rebuild an :class:`OntologicalCausalGraph` from an RDF graph written by :meth:`to_rdf`.
 
-        Nodes come from the ``ckg:slotIndex``-ordered ``ckg:NodeSlot``
-        resources (``ckg:hasNode`` is unordered and would scramble the
-        adjacency), falling back to the legacy ``ckg:nodeList`` ``rdf:List``
+        Nodes come from the ``cw:slotIndex``-ordered ``cw:NodeSlot``
+        resources (``cw:hasNode`` is unordered and would scramble the
+        adjacency), falling back to the legacy ``cw:nodeList`` ``rdf:List``
         for Turtle written before the RML export — everything under
         ``results/`` is of that older vintage.  Each node is rebuilt as a
-        :class:`~causalkg.nodes.PropertyNode` and re-labelled from
+        :class:`~causalway.nodes.PropertyNode` and re-labelled from
         ``rdfs:label`` so a uniquified name (``foo_2``) survives.  Edges,
-        weights and provenance are read off the reified ``ckg:CausalEdge`` /
-        ``ckg:DiscoveryRun`` resources; hyper-parameters come from
-        ``ckg:hasParameter``, or from a legacy ``ckg:parameters`` JSON literal.
+        weights and provenance are read off the reified ``cw:CausalEdge`` /
+        ``cw:DiscoveryRun`` resources; hyper-parameters come from
+        ``cw:hasParameter``, or from a legacy ``cw:parameters`` JSON literal.
 
-        When the graph carries several ``ckg:OntologicalCausalGraph``
+        When the graph carries several ``cw:OntologicalCausalGraph``
         instances (e.g. a bundle written by :func:`write_bundle`), pass
         ``graph_id=`` or ``method=`` to disambiguate; with exactly one
         candidate neither is required.
         """
-        candidates = list(graph.subjects(RDF.type, CKG.OntologicalCausalGraph))
+        candidates = list(graph.subjects(RDF.type, CW.OntologicalCausalGraph))
         if graph_id is not None:
             graph_iri = URIRef(GRAPH_STEM + _slug(graph_id))
             if graph_iri not in candidates:
                 raise ValueError(
-                    f"No ckg:OntologicalCausalGraph {graph_iri} in the given graph. "
+                    f"No cw:OntologicalCausalGraph {graph_iri} in the given graph. "
                     f"Candidates: {candidates}"
                 )
         elif method is not None:
-            matches = [g for g in candidates if (g, CKG.method, Literal(method)) in graph]
+            # cw:method lives on the DiscoveryRun (prov:wasGeneratedBy); only
+            # legacy Turtle put it on the graph itself — same lookup as below.
+            def _method_of(gi):
+                run = graph.value(gi, PROV.wasGeneratedBy)
+                found = graph.value(run, CW.method) if run is not None else None
+                return found if found is not None else graph.value(gi, CW.method)
+
+            matches = [g for g in candidates if _method_of(g) == Literal(method)]
             if len(matches) != 1:
                 raise ValueError(
-                    f"Expected exactly one ckg:OntologicalCausalGraph with method={method!r}, "
+                    f"Expected exactly one cw:OntologicalCausalGraph with method={method!r}, "
                     f"found {len(matches)}. Candidates: {candidates}"
                 )
             graph_iri = matches[0]
@@ -344,37 +357,37 @@ class OntologicalCausalGraph:
             graph_iri = candidates[0]
         else:
             raise ValueError(
-                "Ambiguous or missing ckg:OntologicalCausalGraph in the given graph: "
+                "Ambiguous or missing cw:OntologicalCausalGraph in the given graph: "
                 f"pass graph_id= or method= to disambiguate. Candidates: {candidates}"
             )
 
         slots = []
-        for slot in graph.objects(graph_iri, CKG.hasNodeSlot):
-            index = graph.value(slot, CKG.slotIndex)
-            node = graph.value(slot, CKG.slotNode)
+        for slot in graph.objects(graph_iri, CW.hasNodeSlot):
+            index = graph.value(slot, CW.slotIndex)
+            node = graph.value(slot, CW.slotNode)
             if index is not None and node is not None:
                 slots.append((int(index), node))
         if slots:
             node_iris = [node for _, node in sorted(slots, key=lambda s: s[0])]
         else:
-            node_list_bnode = graph.value(graph_iri, CKG.nodeList)
+            node_list_bnode = graph.value(graph_iri, CW.nodeList)
             if node_list_bnode is None:
                 raise ValueError(
-                    f"{graph_iri} has neither ckg:hasNodeSlot nor a legacy ckg:nodeList"
+                    f"{graph_iri} has neither cw:hasNodeSlot nor a legacy cw:nodeList"
                 )
             node_iris = list(Collection(graph, node_list_bnode))
 
         nodes: list = []
         for node_iri in node_iris:
-            domain = graph.value(node_iri, CKG.domain)
-            if domain is None:                       # legacy ckg:domainClass
-                domain = graph.value(node_iri, CKG.domainClass)
-            prop = graph.value(node_iri, CKG["property"])
-            kind = str(graph.value(node_iri, CKG.nodeKind))
-            range_ = graph.value(node_iri, CKG["range"])
+            domain = graph.value(node_iri, CW.domain)
+            if domain is None:                       # legacy cw:domainClass
+                domain = graph.value(node_iri, CW.domainClass)
+            prop = graph.value(node_iri, CW["property"])
+            kind = str(graph.value(node_iri, CW.nodeKind))
+            range_ = graph.value(node_iri, CW["range"])
             if range_ is None:                       # legacy split range terms
                 range_ = graph.value(
-                    node_iri, CKG.rangeClass if kind == "object" else CKG.rangeDatatype
+                    node_iri, CW.rangeClass if kind == "object" else CW.rangeDatatype
                 )
             node = PropertyNode(domain=domain, prop=prop, range_=range_, kind=kind)
             label = graph.value(node_iri, RDFS.label)
@@ -390,22 +403,22 @@ class OntologicalCausalGraph:
         edge_labels: dict = {}
         manual_edges: set = set()
 
-        for edge in graph.objects(graph_iri, CKG.hasEdge):
-            cause = graph.value(edge, CKG.cause)
-            effect = graph.value(edge, CKG.effect)
+        for edge in graph.objects(graph_iri, CW.hasEdge):
+            cause = graph.value(edge, CW.cause)
+            effect = graph.value(edge, CW.effect)
             if cause not in index_of or effect not in index_of:
                 continue
             i, j = index_of[cause], index_of[effect]
             adj[i, j] = 1
-            w = graph.value(edge, CKG.weight)
+            w = graph.value(edge, CW.weight)
             if w is not None:
                 weights[i, j] = float(w)
                 has_weights = True
             edge_labels[(i, j)] = _labels_from_edge(graph, edge)
-            if bool(graph.value(edge, CKG.manuallyAdded)):
+            if bool(graph.value(edge, CW.manuallyAdded)):
                 manual_edges.add((i, j))
 
-        # `ckg:method` and the constraint flag live on the ckg:DiscoveryRun; the
+        # `cw:method` and the constraint flag live on the cw:DiscoveryRun; the
         # graph reaches them through prov:wasGeneratedBy. Older Turtle duplicated
         # both onto the graph itself, so that copy is still read as a fallback.
         run_iri = graph.value(graph_iri, PROV.wasGeneratedBy)
@@ -416,23 +429,23 @@ class OntologicalCausalGraph:
         created_at = None
         params: dict = {}
         if run_iri is not None:
-            run_method = graph.value(run_iri, CKG.method)
-            constrained_lit = graph.value(run_iri, CKG.usedTopologicalConstraint)
-            src = graph.value(run_iri, CKG.sourceKG)
+            run_method = graph.value(run_iri, CW.method)
+            constrained_lit = graph.value(run_iri, CW.usedTopologicalConstraint)
+            src = graph.value(run_iri, CW.sourceKG)
             source = str(src) if src is not None else None
             ended = graph.value(run_iri, PROV.endedAtTime)
             created_at = str(ended) if ended is not None else None
-            for param in graph.objects(run_iri, CKG.hasParameter):
-                name = graph.value(param, CKG.parameterName)
+            for param in graph.objects(run_iri, CW.hasParameter):
+                name = graph.value(param, CW.parameterName)
                 if name is None:
                     continue
-                kind = graph.value(param, CKG.parameterKind)
-                text = graph.value(param, CKG.parameterValue)
+                kind = graph.value(param, CW.parameterKind)
+                text = graph.value(param, CW.parameterValue)
                 params[str(name)] = _param_value(
                     str(kind) if kind is not None else "str",
                     str(text) if text is not None else "",
                 )
-            params_lit = graph.value(run_iri, CKG.parameters)
+            params_lit = graph.value(run_iri, CW.parameters)
             if not params and params_lit is not None:   # legacy JSON literal
                 try:
                     params = json.loads(str(params_lit))
@@ -440,9 +453,9 @@ class OntologicalCausalGraph:
                     params = {}
 
         if run_method is None:
-            run_method = graph.value(graph_iri, CKG.method)          # legacy
+            run_method = graph.value(graph_iri, CW.method)          # legacy
         if constrained_lit is None:
-            constrained_lit = graph.value(graph_iri, CKG.constrained)  # legacy
+            constrained_lit = graph.value(graph_iri, CW.constrained)  # legacy
         recovered_gid = str(graph_iri)[len(GRAPH_STEM):]
 
         return cls(
@@ -467,7 +480,7 @@ class OntologicalCausalGraph:
         * ``"strict"`` (default) — raise, listing the offending cycle(s).
           Silently orienting an edge changes every downstream answer, so it
           must be a deliberate act.
-        * ``"weight"`` — repeatedly break the lowest-``ckg:weight`` edge of
+        * ``"weight"`` — repeatedly break the lowest-``cw:weight`` edge of
           each remaining cycle until the graph is acyclic.
         * ``"constraint"`` — requires ``constraint=``; keep only directions
           with ``constraint.allowed[i, j]``, flipping an edge into its
@@ -620,7 +633,7 @@ class OntologicalCausalGraph:
         return URIRef(f"{GRAPH_STEM}{self.gid}/edge/{i}_{j}")
 
     def slot_iri(self, k: int) -> URIRef:
-        """IRI of the ``ckg:NodeSlot`` holding column ``k`` of ``adj``."""
+        """IRI of the ``cw:NodeSlot`` holding column ``k`` of ``adj``."""
         return URIRef(f"{GRAPH_STEM}{self.gid}/slot/{k}")
 
     # ------------------------------------------------------------------ #
@@ -729,8 +742,8 @@ class OntologicalCausalGraph:
             }
             # An *empty* reference is not an absent one to SDM-RDFizer: it
             # writes the literal "None". A null parameter (and the empty
-            # string) therefore carries no ckg:parameterValue at all, and
-            # ckg:parameterKind alone tells the two apart on the way back.
+            # string) therefore carries no cw:parameterValue at all, and
+            # cw:parameterKind alone tells the two apart on the way back.
             if text != "":
                 record["value"] = text
             parameters.append(record)
@@ -746,7 +759,7 @@ class OntologicalCausalGraph:
                 "property": str(node.prop),
                 "kind": node.kind,
                 # One range term for a class and for a datatype alike, exactly as
-                # rdfs:range is one term; ckg:nodeKind already says which it is.
+                # rdfs:range is one term; cw:nodeKind already says which it is.
                 "range": str(node.range_),
             }
             nodes.append(record)
@@ -780,11 +793,11 @@ class OntologicalCausalGraph:
             edges.append(record)
 
             # Every relation the edge's join touches is listed flat under
-            # ckg:viaRelation, so "which edges traverse this property" needs no
+            # cw:viaRelation, so "which edges traverse this property" needs no
             # path parsing.  The *ordered, directed* form goes into one
-            # ckg:viaPath property-path literal — and only when it says
+            # cw:viaPath property-path literal — and only when it says
             # something viaRelation does not, i.e. never for a plain forward hop
-            # and never for ckg:epsilon, which has no direction to record.
+            # and never for cw:epsilon, which has no direction to record.
             for label_value in labels:
                 steps = _hops_of(label_value)
                 for rel, _direction in steps:
@@ -820,19 +833,19 @@ class OntologicalCausalGraph:
 
         The triples are produced by `SDM-RDFizer
         <https://github.com/SDM-TIB/SDM-RDFizer>`_ from :meth:`to_json`'s
-        document and the RML mapping shipped as ``causalkg/ocg_mapping.rml.ttl``
+        document and the RML mapping shipped as ``causalway/ocg_mapping.rml.ttl``
         — no triple is written by this method.  The output is a complete,
         self-describing model:
 
-        * one ``ckg:OntologicalCausalGraph`` instance (this result),
-        * the ``ckg:DiscoveryRun`` that produced it (method, constraint flag,
-          source KG, timestamp) and its ``ckg:Parameter`` resources,
-        * one ``ckg:PropertyNode`` per node ``(D_p, p, R_p)``, plus one
-          ``ckg:NodeSlot`` fixing that node's column in ``adj``,
-        * one reified ``ckg:CausalEdge`` per edge, carrying ``ckg:cause``,
-          ``ckg:effect``, ``ckg:weight``, the relations it traverses
-          (``ckg:viaRelation``, ``ckg:epsilon`` for intra-class edges) and,
-          when order and direction matter, one ``ckg:viaPath`` SPARQL
+        * one ``cw:OntologicalCausalGraph`` instance (this result),
+        * the ``cw:DiscoveryRun`` that produced it (method, constraint flag,
+          source KG, timestamp) and its ``cw:Parameter`` resources,
+        * one ``cw:PropertyNode`` per node ``(D_p, p, R_p)``, plus one
+          ``cw:NodeSlot`` fixing that node's column in ``adj``,
+        * one reified ``cw:CausalEdge`` per edge, carrying ``cw:cause``,
+          ``cw:effect``, ``cw:weight``, the relations it traverses
+          (``cw:viaRelation``, ``cw:epsilon`` for intra-class edges) and,
+          when order and direction matter, one ``cw:viaPath`` SPARQL
           property-path literal.
 
         Pass an existing ``graph`` to accumulate several methods into one store.
@@ -845,7 +858,7 @@ class OntologicalCausalGraph:
         literal contains a quote (see this module's docstring).
         """
         g = Graph() if graph is None else graph
-        g.bind("ckg", CKG)
+        g.bind("cw", CW)
         g.bind("prov", PROV)
         g.bind("rdfs", RDFS)
         g.bind("xsd", XSD)
@@ -926,7 +939,7 @@ def write_bundle(ocgs, path: str, with_vocabulary: bool = True,
     """Serialize several OCGs (e.g. one per method) into a single KG file.
 
     Property nodes carry global IRIs, so the per-method graphs join on the same
-    ``ckg:PropertyNode`` resources and can be compared with one SPARQL query.
+    ``cw:PropertyNode`` resources and can be compared with one SPARQL query.
 
     ``ocgs`` is an iterable of :class:`OntologicalCausalGraph`, or a
     ``{method: ocg}`` mapping (the key is used as the method when the OCG does
@@ -934,7 +947,7 @@ def write_bundle(ocgs, path: str, with_vocabulary: bool = True,
     """
     items = ocgs.items() if isinstance(ocgs, dict) else [(None, o) for o in ocgs]
     g = Graph()
-    g.bind("ckg", CKG)
+    g.bind("cw", CW)
     g.bind("prov", PROV)
     if with_vocabulary:
         vocabulary(g)

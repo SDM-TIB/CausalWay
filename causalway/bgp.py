@@ -56,7 +56,7 @@ behaviour instead.
 
 Object-valued columns carry the **full IRI** of the related entity, not its
 local name. Two entities in different namespaces can share a local name, and
-``causalkg.cf_export`` needs the IRI to emit the value as an ``rr:IRI`` term
+``causalway.cf_export`` needs the IRI to emit the value as an ``rr:IRI`` term
 rather than a string. Readability is the front end's job (``shortIri()``),
 not the materialiser's — shortening here destroyed information that could
 not be recovered downstream.

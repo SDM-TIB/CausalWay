@@ -64,7 +64,7 @@ class OntologySchema:
         """Parse the T-Box of a SPARQL endpoint. ``infer_missing`` defaults to
         ``False`` here (unlike :meth:`from_file`) — the inference queries scan
         the whole A-Box, which is fine on a KG-sized file and hostile to a
-        public endpoint. See :func:`causalkg.sources.resolve_schema`, which
+        public endpoint. See :func:`causalway.sources.resolve_schema`, which
         this delegates to.
         """
         from .sources import resolve_schema
@@ -74,7 +74,7 @@ class OntologySchema:
     def from_source(cls, source, **kw) -> "OntologySchema":
         """Polymorphic entry point: file path, endpoint URL, or ``rdflib.Graph``.
 
-        Thin wrapper over :func:`causalkg.sources.resolve_schema` (imported
+        Thin wrapper over :func:`causalway.sources.resolve_schema` (imported
         lazily to avoid a circular import).
         """
         from .sources import resolve_schema
