@@ -62,8 +62,13 @@ def test_from_rdf_recovers_uniquified_names():
 
     g = ocg.to_rdf()
     ocg2 = OntologicalCausalGraph.from_rdf(g)
-    assert [n.name for n in ocg2.nodes] == ["Patient.stage", "Patient.stage_2"]
-    assert np.array_equal(ocg.adj, ocg2.adj)
+    # A graph's nodes are a set: from_rdf returns them in build_nodes' canonical
+    # (domain, property, range) order, which this hand-built pair is not in. What
+    # must survive is each node's *name*, bound to its identity, and the edge.
+    assert {(str(n.range_), n.name) for n in ocg2.nodes} == {
+        (str(EX.string), "Patient.stage"), (str(EX.integer), "Patient.stage_2")}
+    [(i, j)] = ocg2.edges()
+    assert (ocg2.nodes[i].name, ocg2.nodes[j].name) == ("Patient.stage", "Patient.stage_2")
 
 
 def test_ambiguous_graph_requires_graph_id_or_method():

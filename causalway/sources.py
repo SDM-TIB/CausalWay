@@ -16,7 +16,7 @@ from rdflib import RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLStore
 
 from .ontology import OntologySchema
-from .vocab import CW, GRAPH_STEM, PROV
+from .vocab import CW, GRAPH_STEM
 
 GraphSource = Union[str, os.PathLike, rdflib.Graph]
 CausalGraphSource = Union[GraphSource, "OntologicalCausalGraph"]  # noqa: F821 (forward ref, see below)
@@ -135,26 +135,26 @@ def list_ocgs(source: GraphSource, *, format: Optional[str] = None,
     graph = resolve_graph(source, format=format, timeout=timeout)
     rows = []
     for gi in graph.subjects(RDF.type, CW.OntologicalCausalGraph):
-        n_nodes = graph.value(gi, CW.nodeCount)
-        n_edges = graph.value(gi, CW.edgeCount)
-        run = graph.value(gi, PROV.wasGeneratedBy)
-        created_at = graph.value(run, PROV.endedAtTime) if run is not None else None
-        # Method and the constraint flag describe the run; older Turtle also
-        # duplicated them onto the graph, so that copy is the fallback.
-        method = graph.value(run, CW.method) if run is not None else None
-        constrained = (graph.value(run, CW.usedTopologicalConstraint)
-                       if run is not None else None)
-        if method is None:
-            method = graph.value(gi, CW.method)
-        if constrained is None:
-            constrained = graph.value(gi, CW.constrained)
+        # Counts are not stored — a graph's nodes and edges are the resources
+        # that name it with cw:inGraph — so they are counted here.
+        members = set(graph.subjects(CW.inGraph, gi))
+        n_nodes = sum(1 for m in members if (m, RDF.type, CW.CausalNode) in graph)
+        n_edges = sum(1 for m in members if (m, RDF.type, CW.CausalEdge) in graph)
+        run = graph.value(gi, CW.discoveredBy)
+        created_at = graph.value(run, CW.discoveredTime) if run is not None else None
+        method = graph.value(run, CW.byMethod) if run is not None else None
+        constrained = None
+        if run is not None:
+            for param in graph.objects(run, CW.hasParameter):
+                if str(graph.value(param, CW.parameterName)) == "topologicalConstraint":
+                    constrained = graph.value(param, CW.parameterValue)
         gid = str(gi)[len(GRAPH_STEM):] if str(gi).startswith(GRAPH_STEM) else str(gi)
         rows.append({
             "gid": gid,
             "method": str(method) if method is not None else None,
-            "constrained": bool(constrained) if constrained is not None else None,
-            "n_nodes": int(n_nodes) if n_nodes is not None else None,
-            "n_edges": int(n_edges) if n_edges is not None else None,
+            "constrained": bool(constrained.toPython()) if constrained is not None else None,
+            "n_nodes": n_nodes,
+            "n_edges": n_edges,
             "created_at": str(created_at) if created_at is not None else None,
             "iri": str(gi),
         })

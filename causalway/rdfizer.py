@@ -1,9 +1,11 @@
 """Run SDM-RDFizer over a JSON document and an RML mapping, in one call.
 
-Two exports go through this: the ontological causal graph
-(:mod:`causalway.result` + ``ocg_mapping.rml.ttl``) and the counterfactual worlds
-(:mod:`causalway.cf_export` + ``cf_mapping.rml.ttl``).  They share every quirk of
-the engine, so they share this module rather than each carrying a copy.
+Three exports go through this: the ontological causal graph
+(:mod:`causalway.result` + ``ocg_mapping.rml.ttl``), the fitted model
+(:mod:`causalway.model_export` + ``model_mapping.rml.ttl``), and queries with
+their answers (:mod:`causalway.query_export` + ``query_mapping.rml.ttl``).  They
+share every quirk of the engine, so they share this module rather than each
+carrying a copy.
 
 The quirks worth knowing here — the mapping files document the rest:
 

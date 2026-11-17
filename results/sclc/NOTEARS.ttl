@@ -1,161 +1,307 @@
 @prefix cw: <http://sdm-causalway.org/> .
-@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/0> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 0 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.ageGroup-02429de7> .
+cw:CausalDiscoveryRun a rdfs:Class ;
+    rdfs:label "CausalDiscoveryRun" ;
+    rdfs:comment "One execution of a causal-discovery method (or of expert curation) over one knowledge graph." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/1> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 1 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.biomarker-97c6c409> .
+cw:CausalEdge a rdfs:Class ;
+    rdfs:label "CausalEdge" ;
+    rdfs:comment "A directed causal edge of one graph, with the relational path along which the cause reaches the effect." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/2> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 2 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.episodeType-45d49e73> .
+cw:CausalMechanism a rdfs:Class ;
+    rdfs:label "CausalMechanism" ;
+    rdfs:comment "The mechanism a structural causal model assigned to one node." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/3> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 3 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.familyCancer-6e85bf0b> .
+cw:CausalModel a rdfs:Class ;
+    rdfs:label "CausalModel" ;
+    rdfs:comment "A causal model fitted on one causal graph: a structural causal model (one mechanism per node) or a causal Bayesian network (one CPT per node)." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/4> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 4 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.familyGender-002d321e> .
+cw:CausalNode a rdfs:Class ;
+    rdfs:label "CausalNode" ;
+    rdfs:comment "A causal node (D_p, p, R_p) of one graph: property p, scoped to the domain class D_p and the range R_p." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/5> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 5 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.gender-f7a4b0f1> .
+cw:Condition a rdfs:Class ;
+    rdfs:label "Condition" ;
+    rdfs:comment "Z = z: one node observed at one value." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/6> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 6 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.locatedIn-8f01bdc5> .
+cw:ConditionalAnswer a rdfs:Class ;
+    rdfs:label "ConditionalAnswer" ;
+    rdfs:comment "The answer to a cw:ConditionalQuery for one target node." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/7> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 7 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.relapseStatus-9c778739> .
+cw:ConditionalQuery a rdfs:Class ;
+    rdfs:label "ConditionalQuery" ;
+    rdfs:comment "P(V | Z = z): what the targets are observed to be in the (sub-)population selected by the conditions." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/8> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 8 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.smokerType-80f6dde3> .
+cw:CounterfactualAnswer a rdfs:Class ;
+    rdfs:label "CounterfactualAnswer" ;
+    rdfs:comment "The answer to a cw:CounterfactualQuery for one target node." .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/9> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
-    cw:slotIndex 9 ;
-    cw:slotNode <http://sdm-causalway.org/node/SCLCPatient.stage-edc9f824> .
+cw:CounterfactualQuery a rdfs:Class ;
+    rdfs:label "CounterfactualQuery" ;
+    rdfs:comment "P(V_{do(X = x)} | e): what the targets would have been for one unit e — a named entity or a hand-described unit — had X been x." .
 
-<http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7> a cw:DiscoveryRun,
-        prov:Activity ;
-    rdfs:label "Causal discovery run: NOTEARS" ;
-    cw:method "NOTEARS" ;
-    cw:sourceKG "/Users/jason/Documents/Coding Projects.nosync/2026_Claude/CausalKG_api/kgs/ttls/SCLC_patients.ttl" ;
-    cw:usedTopologicalConstraint true ;
-    prov:endedAtTime "2026-09-23T07:50:50+00:00"^^xsd:dateTime ;
-    prov:used "/Users/jason/Documents/Coding Projects.nosync/2026_Claude/CausalKG_api/kgs/ttls/SCLC_patients.ttl" .
+cw:Intervention a rdfs:Class ;
+    rdfs:label "Intervention" ;
+    rdfs:comment "do(X = x): one node set to one value." .
 
-<http://sdm-causalway.org/node/SCLCPatient.ageGroup-02429de7> a cw:PropertyNode ;
+cw:InterventionalAnswer a rdfs:Class ;
+    rdfs:label "InterventionalAnswer" ;
+    rdfs:comment "The answer to a cw:InterventionalQuery for one target node." .
+
+cw:InterventionalQuery a rdfs:Class ;
+    rdfs:label "InterventionalQuery" ;
+    rdfs:comment "P(V | do(X = x), Z = z): what the targets would be in the (sub-)population if X were set to x." .
+
+cw:ModelFittingRun a rdfs:Class ;
+    rdfs:label "ModelFittingRun" ;
+    rdfs:comment "One execution of model fitting that produced a cw:CausalModel." .
+
+cw:OntologicalCausalGraph a rdfs:Class ;
+    rdfs:label "OntologicalCausalGraph" ;
+    rdfs:comment "A discovered ontological causal graph G = (N, E_N): a DAG over causal nodes (D_p, p, R_p)." .
+
+cw:Parameter a rdfs:Class ;
+    rdfs:label "Parameter" ;
+    rdfs:comment "One named setting of a run: a seed, a significance level, maxhop, topologicalConstraint, and so on." .
+
+cw:aboutEntity a rdf:Property ;
+    rdfs:label "aboutEntity" ;
+    rdfs:comment "Counterfactual only: the individual of the source KG the query is about." .
+
+cw:artifactChecksum a rdf:Property ;
+    rdfs:label "artifactChecksum" ;
+    rdfs:comment "sha256 of the saved model file (scm.pkl), so a reader can check that the artifact at hand is the one that produced an answer." .
+
+cw:byMethod a rdf:Property ;
+    rdfs:label "byMethod" ;
+    rdfs:comment "The method a run executed: GES, PC, NOTEARS, ... for discovery, 'curated' for an expert-assembled graph, dowhy.gcm or pgmpy for fitting." .
+
+cw:cause a rdf:Property ;
+    rdfs:label "cause" ;
+    rdfs:comment "The causal node an edge starts from." .
+
+cw:curated a rdf:Property ;
+    rdfs:label "curated" ;
+    rdfs:comment "True iff an expert reviewed the edge and kept it (or added it)." .
+
+cw:discoveredBy a rdf:Property ;
+    rdfs:label "discoveredBy" ;
+    rdfs:comment "The cw:CausalDiscoveryRun that produced this graph." .
+
+cw:discoveredTime a rdf:Property ;
+    rdfs:label "discoveredTime" ;
+    rdfs:comment "When the discovery run finished." .
+
+cw:domain a rdf:Property ;
+    rdfs:label "domain" ;
+    rdfs:comment "Domain class D_p of a causal node. Deliberately not rdfs:domain, whose entailment would make the node an rdf:Property and intersect domains globally." .
+
+cw:effect a rdf:Property ;
+    rdfs:label "effect" ;
+    rdfs:comment "The causal node an edge points to." .
+
+cw:evaluatedBy a rdf:Property ;
+    rdfs:label "evaluatedBy" ;
+    rdfs:comment "The cw:CausalModel that computed this answer." .
+
+cw:evaluatedTime a rdf:Property ;
+    rdfs:label "evaluatedTime" ;
+    rdfs:comment "When this answer was computed." .
+
+cw:factualValue a rdf:Property ;
+    rdfs:label "factualValue" ;
+    rdfs:comment "Counterfactual only: what the node actually was for the unit." .
+
+cw:fittedBy a rdf:Property ;
+    rdfs:label "fittedBy" ;
+    rdfs:comment "The cw:ModelFittingRun that produced this model." .
+
+cw:fittedTime a rdf:Property ;
+    rdfs:label "fittedTime" ;
+    rdfs:comment "When the fitting run finished." .
+
+cw:forQuery a rdf:Property ;
+    rdfs:label "forQuery" ;
+    rdfs:comment "The query this answer answers." .
+
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.ageGroup-02429de7> a cw:CausalNode ;
     rdfs:label "SCLCPatient.ageGroup" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/ageGroup> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.biomarker-97c6c409> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.biomarker-97c6c409> a cw:CausalNode ;
     rdfs:label "SCLCPatient.biomarker" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/biomarker> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.episodeType-45d49e73> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.episodeType-45d49e73> a cw:CausalNode ;
     rdfs:label "SCLCPatient.episodeType" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/episodeType> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.familyCancer-6e85bf0b> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.familyCancer-6e85bf0b> a cw:CausalNode ;
     rdfs:label "SCLCPatient.familyCancer" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/familyCancer> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.familyGender-002d321e> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.familyGender-002d321e> a cw:CausalNode ;
     rdfs:label "SCLCPatient.familyGender" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/familyGender> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.gender-f7a4b0f1> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.gender-f7a4b0f1> a cw:CausalNode ;
     rdfs:label "SCLCPatient.gender" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/gender> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.locatedIn-8f01bdc5> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.locatedIn-8f01bdc5> a cw:CausalNode ;
     rdfs:label "SCLCPatient.locatedIn" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/locatedIn> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.relapseStatus-9c778739> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.relapseStatus-9c778739> a cw:CausalNode ;
     rdfs:label "SCLCPatient.relapseStatus" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/relapseStatus> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.smokerType-80f6dde3> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.smokerType-80f6dde3> a cw:CausalNode ;
     rdfs:label "SCLCPatient.smokerType" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/smokerType> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/SCLCPatient.stage-edc9f824> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/node/SCLCPatient.stage-edc9f824> a cw:CausalNode ;
     rdfs:label "SCLCPatient.stage" ;
     cw:domain <http://causalkg.example.org/sclc/SCLCPatient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> ;
     cw:property <http://causalkg.example.org/sclc/stage> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> a cw:OntologicalCausalGraph,
-        prov:Entity ;
-    rdfs:label "Ontological causal graph (NOTEARS)" ;
-    cw:edgeCount 0 ;
-    cw:hasNode <http://sdm-causalway.org/node/SCLCPatient.ageGroup-02429de7>,
-        <http://sdm-causalway.org/node/SCLCPatient.biomarker-97c6c409>,
-        <http://sdm-causalway.org/node/SCLCPatient.episodeType-45d49e73>,
-        <http://sdm-causalway.org/node/SCLCPatient.familyCancer-6e85bf0b>,
-        <http://sdm-causalway.org/node/SCLCPatient.familyGender-002d321e>,
-        <http://sdm-causalway.org/node/SCLCPatient.gender-f7a4b0f1>,
-        <http://sdm-causalway.org/node/SCLCPatient.locatedIn-8f01bdc5>,
-        <http://sdm-causalway.org/node/SCLCPatient.relapseStatus-9c778739>,
-        <http://sdm-causalway.org/node/SCLCPatient.smokerType-80f6dde3>,
-        <http://sdm-causalway.org/node/SCLCPatient.stage-edc9f824> ;
-    cw:hasNodeSlot <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/0>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/1>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/2>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/3>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/4>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/5>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/6>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/7>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/8>,
-        <http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7/slot/9> ;
-    cw:nodeCount 10 ;
-    prov:wasGeneratedBy <http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7> .
+cw:hasCondition a rdf:Property ;
+    rdfs:label "hasCondition" ;
+    rdfs:comment "A condition of the query (the set Z). On a counterfactual, the observed state of a hand-described unit." .
+
+cw:hasIntervention a rdf:Property ;
+    rdfs:label "hasIntervention" ;
+    rdfs:comment "An intervention of the query (the set X; several = a joint do())." .
+
+cw:hasMechanism a rdf:Property ;
+    rdfs:label "hasMechanism" ;
+    rdfs:comment "A cw:CausalMechanism of this model, one per node." .
+
+cw:hasParameter a rdf:Property ;
+    rdfs:label "hasParameter" ;
+    rdfs:comment "A cw:Parameter of this run." .
+
+cw:inGraph a rdf:Property ;
+    rdfs:label "inGraph" ;
+    rdfs:comment "The graph a node or an edge belongs to (exactly one)." .
+
+cw:invertible a rdf:Property ;
+    rdfs:label "invertible" ;
+    rdfs:comment "Whether the mechanism's noise can be abducted from an observation — i.e. whether a counterfactual on this node is defined." .
+
+cw:mechanismType a rdf:Property ;
+    rdfs:label "mechanismType" ;
+    rdfs:comment "Class name of the mechanism, e.g. InvertibleClassifierFCM." .
+
+cw:observedValue a rdf:Property ;
+    rdfs:label "observedValue" ;
+    rdfs:comment "The value a condition observes." .
+
+cw:onGraph a rdf:Property ;
+    rdfs:label "onGraph" ;
+    rdfs:comment "The causal graph a query is posed on, or a model is fitted on." .
+
+cw:onNode a rdf:Property ;
+    rdfs:label "onNode" ;
+    rdfs:comment "The causal node an intervention, condition, answer or mechanism is about." .
+
+cw:onProperty a rdf:Property ;
+    rdfs:label "onProperty" ;
+    rdfs:comment "Shortcut: the cw:property of cw:onNode." .
+
+cw:parameterName a rdf:Property ;
+    rdfs:label "parameterName" ;
+    rdfs:comment "Name of a parameter, e.g. 'seed' or 'maxhop'." .
+
+cw:parameterValue a rdf:Property ;
+    rdfs:label "parameterValue" ;
+    rdfs:comment "Value of a parameter, as a typed literal (xsd:integer, xsd:double, xsd:boolean or a plain string)." .
+
+cw:predictedValue a rdf:Property ;
+    rdfs:label "predictedValue" ;
+    rdfs:comment "The answer: the most probable value of a categorical node, the mean of a continuous one." .
+
+cw:probability a rdf:Property ;
+    rdfs:label "probability" ;
+    rdfs:comment "Categorical nodes only: the probability of cw:predictedValue." .
+
+cw:property a rdf:Property ;
+    rdfs:label "property" ;
+    rdfs:comment "The property p of a causal node." .
+
+cw:range a rdf:Property ;
+    rdfs:label "range" ;
+    rdfs:comment "Range R_p of a causal node: a class for an object property, a datatype for a data property. Deliberately not rdfs:range, for the reason given at cw:domain." .
+
+cw:setValue a rdf:Property ;
+    rdfs:label "setValue" ;
+    rdfs:comment "The value an intervention sets its node to." .
+
+cw:sourceKG a rdf:Property ;
+    rdfs:label "sourceKG" ;
+    rdfs:comment "The knowledge graph a run read: a file name or a SPARQL endpoint." .
+
+cw:std a rdf:Property ;
+    rdfs:label "std" ;
+    rdfs:comment "Continuous nodes only: the standard deviation around cw:predictedValue." .
+
+cw:viaRelationalPath a rdf:Property ;
+    rdfs:label "viaRelationalPath" ;
+    rdfs:comment "The relational path from the cause's domain to the effect's domain, as a SPARQL 1.1 property path: '<p>' a forward hop, '^<p>' an inverse hop, '/' a sequence. Absent on an intra-class (epsilon) edge, whose cause and effect belong to one entity." .
+
+cw:weight a rdf:Property ;
+    rdfs:label "weight" ;
+    rdfs:comment "Method-assigned strength of the edge (a coefficient or a score). In a curated graph, the fraction of discovery runs that proposed the edge. Absent on an edge an expert added by hand." .
+
+<http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7> a cw:CausalDiscoveryRun ;
+    cw:byMethod "NOTEARS" ;
+    cw:discoveredTime "2026-09-23T07:50:50+00:00"^^xsd:dateTime ;
+    cw:hasParameter <http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7/parameter/maxhop>,
+        <http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7/parameter/topologicalConstraint> ;
+    cw:sourceKG "/Users/jason/Documents/Coding Projects.nosync/2026_Claude/CausalKG_api/kgs/ttls/SCLC_patients.ttl" .
+
+<http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7/parameter/maxhop> a cw:Parameter ;
+    cw:parameterName "maxhop" ;
+    cw:parameterValue 1 ;
+    rdfs:comment "Maximum number of object-property hops a relational path may take for an effect to pass between two classes." .
+
+<http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7/parameter/topologicalConstraint> a cw:Parameter ;
+    cw:parameterName "topologicalConstraint" ;
+    cw:parameterValue true ;
+    rdfs:comment "Whether Assumption 1 was enforced: an edge is allowed only between nodes linked by a relational path of at most maxhop hops." .
+
+<http://sdm-causalway.org/graph/NOTEARS-0e3d9c7aefa7> a cw:OntologicalCausalGraph ;
+    cw:discoveredBy <http://sdm-causalway.org/run/NOTEARS-0e3d9c7aefa7> .
 

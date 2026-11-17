@@ -1,240 +1,232 @@
-"""The query/answer export goes through RML, and produces what it used to.
+"""Queries and answers go through ``query_mapping.rml.ttl`` and come out in the cw: shape.
 
-``store_query`` used to build its triples with thirty-odd ``g.add(...)`` calls.
-It now delegates to ``query_export.queries_to_rdf``, which hands
-``query_mapping.rml.ttl`` to SDM-RDFizer.  The equivalence that justified
-deleting the hand-written version is pinned here: same subjects, same
-predicates, same objects, modulo ``cw:computedAt``, which is stamped at call
-time and therefore differs between any two runs.
+What is pinned here:
+
+* a query points at its **graph** (``cw:onGraph``) and names no model; each
+  answer points at its **model** (``cw:evaluatedBy``) and at its query;
+* one answer per target node, typed by the model's fitted dtype, with
+  ``cw:probability`` for a categorical node and ``cw:std`` for a continuous one;
+* Z is one set — ``cw:hasCondition`` on every kind of query;
+* the service turns its flat answer log into these queries, one answer per board
+  node, and bundles the model and its graph so every IRI resolves in the file.
 
 These tests need SDM-RDFizer on PATH, like ``test_result_rml_export.py``.
 """
 
-import numpy as np
 import pytest
-from rdflib import RDF, Namespace, URIRef
+from rdflib import Graph, Literal, RDF, URIRef, XSD
 
-from causalway.constraints import EdgeConstraint
-from causalway.nodes import PropertyNode
-from causalway.queries import (
-    Answer, Condition, Intervention, Query, answer_iri, condition_iri,
-    intervention_iri, load_queries, query_iri, store_query,
-)
+from causalway.queries import Answer, Condition, Intervention, Query, query_iri
 from causalway.query_export import queries_to_json, queries_to_rdf
-from causalway.result import OntologicalCausalGraph
 from causalway.vocab import CW
 
-EX = Namespace("http://example.org/")
+from _fixtures import PATIENT_0, FakeModel, clinic_ocg
 
 
-def _toy_ocg():
-    # Patient.age -> Patient.stage -> Patient.survival
-    nodes = [
-        PropertyNode(domain=EX.Patient, prop=EX.age, range_=EX.integer, kind="data"),
-        PropertyNode(domain=EX.Patient, prop=EX.stage, range_=EX.string, kind="data"),
-        PropertyNode(domain=EX.Patient, prop=EX.survival, range_=EX.string, kind="data"),
+def _answer(node, predicted, probability=None, std=None, **kw):
+    return Answer(kind="x", target=node, predicted=predicted,
+                  distribution=({predicted: probability} if probability is not None else None),
+                  std=std, **kw)
+
+
+@pytest.fixture(scope="module")
+def setup():
+    ocg = clinic_ocg()
+    dtypes = {n.name: "categorical" for n in ocg.nodes}
+    dtypes["Patient.age"] = "continuous"
+    model = FakeModel(ocg, dtypes=dtypes)
+    items = [
+        (Query(kind="conditional", conditions=[Condition("Patient.smoking", "Yes")]),
+         [_answer("Patient.survival", "Short", 0.6), _answer("Patient.age", 61.5, std=4.2)]),
+        (Query(kind="interventional", label="P(V | do(careQuality=High), smoking=Yes)",
+               interventions=[Intervention("Hospital.careQuality", "High")],
+               conditions=[Condition("Patient.smoking", "Yes")]),
+         [_answer("Patient.survival", "Long", 0.58)]),
+        (Query(kind="counterfactual", entity=PATIENT_0,
+               interventions=[Intervention("Patient.smoking", "No")]),
+         [_answer("Patient.survival", "Long", 0.64, factual="Short")]),
     ]
-    n = len(nodes)
-    allowed = np.zeros((n, n), dtype=bool)
-    allowed[0, 1] = allowed[1, 2] = True
-    constraint = EdgeConstraint(names=[x.name for x in nodes], nodes=nodes,
-                                allowed=allowed)
-    return OntologicalCausalGraph.from_discovery(allowed.astype(int), constraint,
-                                                 method="TEST")
+    return ocg, model, items, queries_to_rdf(items, model)
 
 
-class _FakeModel:
-    """Duck-typed stand-in for CausalModel — spec.ocg and iri are all that is read."""
-
-    def __init__(self, ocg, model_id="test-model"):
-        self.spec = type("_Spec", (), {"ocg": ocg, "mat": None})()
-        self.model_id = model_id
-        self.manifest = {"dtypes": {}}
-
-    @property
-    def iri(self):
-        return URIRef(f"http://sdm-causalway.org/model/{self.model_id}")
+def test_each_query_is_posed_on_the_graph_and_names_no_model(setup):
+    ocg, model, items, g = setup
+    for query, _ in items:
+        q = query_iri(query)
+        assert (q, CW.onGraph, ocg.iri) in g
+        assert (q, CW.evaluatedBy, None) not in g
+        assert (q, CW.usedModel, None) not in g
 
 
-def _interventional():
-    q = Query(kind="interventional", model_id="test-model",
-              target=["Patient.survival"],
-              interventions=[Intervention(node="Patient.stage", value="III")],
-              reference=[Intervention(node="Patient.stage", value="I")],
-              condition_on=[Condition(node="Patient.age", value=61)],
-              label="P(survival | do(stage=III), age=61)")
-    a = Answer(kind="interventional", target="Patient.survival",
-               predicted="alive", effect=0.17)
-    return q, a
+def test_the_class_follows_the_kind(setup):
+    _, _, items, g = setup
+    expected = {"conditional": (CW.ConditionalQuery, CW.ConditionalAnswer),
+                "interventional": (CW.InterventionalQuery, CW.InterventionalAnswer),
+                "counterfactual": (CW.CounterfactualQuery, CW.CounterfactualAnswer)}
+    for query, _ in items:
+        q_cls, a_cls = expected[query.kind]
+        assert (query_iri(query), RDF.type, q_cls) in g
+        for a in g.subjects(CW.forQuery, query_iri(query)):
+            assert (a, RDF.type, a_cls) in g
 
 
-def _conditional():
-    q = Query(kind="conditional", model_id="test-model",
-              target=["Patient.survival"],
-              evidence=[Condition(node="Patient.stage", value="III")])
-    a = Answer(kind="conditional", target="Patient.survival", predicted="dead")
-    return q, a
+def test_every_answer_names_its_model_node_and_time(setup):
+    ocg, model, items, g = setup
+    for query, answers in items:
+        found = list(g.subjects(CW.forQuery, query_iri(query)))
+        assert len(found) == len(answers)
+        for a in found:
+            assert g.value(a, CW.evaluatedBy) == model.iri
+            assert g.value(a, CW.evaluatedTime).datatype == XSD.dateTime
+            node = g.value(a, CW.onNode)
+            assert str(node).startswith(str(ocg.iri) + "/node/")
+            assert g.value(a, CW.onProperty) is not None
 
 
-def _without_timestamp(graph):
-    return {(str(s), str(p), str(o)) for s, p, o in graph if p != CW.computedAt}
+def test_z_is_has_condition_on_every_kind(setup):
+    _, _, items, g = setup
+    cond, interv, _ = items
+    assert (query_iri(cond[0]), CW.hasCondition, None) in g
+    assert (query_iri(interv[0]), CW.hasCondition, None) in g
+    assert (query_iri(interv[0]), CW.hasIntervention, None) in g
+    for retired in ("hasEvidence", "referenceIntervention", "targetNode", "causalEffect"):
+        assert (None, CW[retired], None) not in g
 
 
-def test_rml_export_matches_the_hand_written_triples():
-    ocg = _toy_ocg()
-    model = _FakeModel(ocg)
-    q, a = _interventional()
-
-    rml = queries_to_rdf([(q, a)], model)
-    # store_query now delegates, so this is the same path; what the assertion
-    # pins is that delegating did not change the result.
-    stored = store_query(a, q, model)
-
-    assert _without_timestamp(rml) == _without_timestamp(stored)
-    assert len(list(rml.triples((None, CW.computedAt, None)))) == 1
+def test_categorical_answers_carry_probability_and_continuous_ones_std(setup):
+    _, _, items, g = setup
+    cond = query_iri(items[0][0])
+    by_value = {g.value(a, CW.predictedValue): a for a in g.subjects(CW.forQuery, cond)}
+    survival = by_value[Literal("Short")]
+    age = by_value[Literal(61.5, datatype=XSD.double)]
+    assert g.value(survival, CW.probability) == Literal(0.6, datatype=XSD.double)
+    assert g.value(survival, CW.std) is None
+    assert g.value(age, CW.std) == Literal(4.2, datatype=XSD.double)
+    assert g.value(age, CW.probability) is None
 
 
-def test_interventional_query_carries_its_condition_not_its_evidence():
-    """`cw:hasCondition` is a sub-population under do(); `cw:hasEvidence` is seeing."""
-    ocg = _toy_ocg()
-    model = _FakeModel(ocg)
-    q, a = _interventional()
-    g = queries_to_rdf([(q, a)], model)
-
-    q_iri = query_iri(q)
-    assert (q_iri, CW.hasCondition, condition_iri(q.condition_on[0])) in g
-    assert (q_iri, CW.hasEvidence, None) not in g
-    assert (q_iri, CW.hasIntervention, intervention_iri(q.interventions[0])) in g
-    assert (q_iri, CW.referenceIntervention, intervention_iri(q.reference[0])) in g
-    # The class travels as data through an object map, not rr:class — the triple
-    # it produces is an ordinary rdf:type either way.
-    assert (q_iri, RDF.type, CW.InterventionalQuery) in g
+def test_a_counterfactual_answer_carries_the_factual_value(setup):
+    _, _, items, g = setup
+    q = query_iri(items[2][0])
+    [a] = list(g.subjects(CW.forQuery, q))
+    assert g.value(a, CW.factualValue) == Literal("Short")
+    assert (q, CW.aboutEntity, URIRef(PATIENT_0)) in g
+    # Only the counterfactual answer has a factual value.
+    for query, _ in items[:2]:
+        for other in g.subjects(CW.forQuery, query_iri(query)):
+            assert g.value(other, CW.factualValue) is None
 
 
-def test_conditional_query_carries_its_evidence_not_a_condition():
-    ocg = _toy_ocg()
-    model = _FakeModel(ocg)
-    q, a = _conditional()
-    g = queries_to_rdf([(q, a)], model)
-
-    q_iri = query_iri(q)
-    assert (q_iri, CW.hasEvidence, condition_iri(q.evidence[0])) in g
-    assert (q_iri, CW.hasCondition, None) not in g
-    assert (q_iri, CW.hasIntervention, None) not in g
-
-
-def test_estimate_links_back_to_its_query_and_node():
-    ocg = _toy_ocg()
-    model = _FakeModel(ocg)
-    q, a = _interventional()
-    g = queries_to_rdf([(q, a)], model)
-
-    a_iri = answer_iri(q)
-    assert (a_iri, CW.forQuery, query_iri(q)) in g
-    assert (a_iri, CW.predictedValue, None) in g
-    assert (a_iri, CW.causalEffect, None) in g
+def test_the_same_intervention_on_the_same_graph_is_one_resource():
+    ocg = clinic_ocg()
+    model = FakeModel(ocg)
+    x = [Intervention("Hospital.careQuality", "High")]
+    doc = queries_to_json([
+        (Query(kind="interventional", interventions=x), None),
+        (Query(kind="interventional", interventions=x,
+               conditions=[Condition("Patient.smoking", "Yes")]), None),
+    ], model)
+    links = {r["intervention_iri"] for r in doc["query_interventions"]}
+    assert len(links) == 1
+    assert len(doc["interventions"]) == 1
 
 
-def test_a_per_level_effect_dict_exports_the_reported_level_only():
-    """No JSON literal reaches RDF — SDM-RDFizer would corrupt its quotes."""
-    ocg = _toy_ocg()
-    model = _FakeModel(ocg)
-    q, _ = _interventional()
-    a = Answer(kind="interventional", target="Patient.survival",
-               predicted="alive", effect={"alive": 0.22, "dead": -0.22})
-
-    doc = queries_to_json([(q, a)], model)
-    assert doc["estimate_effects"] == [
-        {"estimate_key": doc["estimates"][0]["estimate_key"], "effect": "0.22"}
-    ]
-    assert all('"' not in str(v) for row in doc["estimate_effects"]
-               for v in row.values())
+def test_a_query_on_another_graph_is_refused():
+    ocg = clinic_ocg()
+    q = Query(kind="conditional", graph_id="some-other-graph")
+    with pytest.raises(ValueError, match="fitted on"):
+        queries_to_json([(q, None)], FakeModel(ocg))
 
 
-def test_export_is_self_describing_about_its_nodes():
-    """A query graph alone must name its nodes, or load_queries cannot replay it."""
-    ocg = _toy_ocg()
-    model = _FakeModel(ocg)
-    q, a = _interventional()
-    g = queries_to_rdf([(q, a)], model)
-
-    described = set(g.subjects(RDF.type, CW.PropertyNode))
-    assert described, "no cw:PropertyNode described"
-    replayed = load_queries(g)
-    assert len(replayed) == 1
+# ---------------------------------------------------------------------- #
+# The service's answer log -> cw: queries
+# ---------------------------------------------------------------------- #
+def _project(model):
+    return type("_P", (), {"model": model})()
 
 
-def test_the_service_rebuilds_a_query_from_its_flat_answer_log():
-    """`_answers_turtle` is the one place the log's flat dict becomes a Query again."""
+def test_the_service_turns_a_board_record_into_one_answer_per_free_node():
     pytest.importorskip("fastapi")
     from service.api.main import _answers_turtle
 
-    ocg = _toy_ocg()
-    project = type("_P", (), {"model": _FakeModel(ocg)})()
+    ocg = clinic_ocg()
+    model = FakeModel(ocg)
     records = [
-        {
-            "answer_id": 1, "kind": "interventional", "target": "Patient.survival",
-            "entity": None, "predicted": "alive", "effect": 0.17,
-            "estimand": "P(survival | do(stage=III), age=61)",
-            "interventions": {"Patient.stage": "III"},
-            "reference": {"Patient.stage": "I"},
-            "conditions": {"Patient.age": 61},
-            "evidence": {},
-        },
-        # A non-replayable record (a stale log entry with no kind) must be
-        # skipped, not crash the export of the ones beside it.
-        {"answer_id": 2, "target": "Patient.survival"},
+        {"answer_id": 1, "at": 1_790_000_000, "kind": "interventional",
+         "estimand": "P(V | do(Hospital.careQuality = High), Patient.smoking = Yes)",
+         "target": "V (all nodes)", "entity": None,
+         "interventions": {"Hospital.careQuality": "High"},
+         "evidence": {"Patient.smoking": "Yes"}, "conditions": {},
+         "board": {"Patient.survival": {"predicted": "Long", "probability": 0.58},
+                   "Patient.tumorStage": {"predicted": "III", "probability": 0.41},
+                   # pinned nodes may sit on the board; they are not answers
+                   "Patient.smoking": {"predicted": "Yes", "probability": 1.0}}},
+        {"answer_id": 2, "target": "Patient.survival"},       # no kind: skipped
     ]
-
-    payload, media_type, suffix = _answers_turtle(project, records)
-    assert media_type == "text/turtle"
-    assert suffix == "ttl"
-
-    # The export carries the vocabulary too, so every term is *defined* in this
-    # document. Asserting on text would match those definitions; assert on the
-    # instance triples instead.
-    from rdflib import Graph
+    payload, media_type, suffix = _answers_turtle(_project(model), records)
+    assert (media_type, suffix) == ("text/turtle", "ttl")
     g = Graph().parse(data=payload.decode(), format="turtle")
-    queries = set(g.subjects(RDF.type, CW.InterventionalQuery))
-    assert len(queries) == 1, "the record with no kind should have been skipped"
-    q_iri = next(iter(queries))
-    assert (q_iri, CW.hasCondition, None) in g      # sub-population, under do()
-    assert (q_iri, CW.referenceIntervention, None) in g
-    assert (q_iri, CW.hasEvidence, None) not in g   # not a conditional query
+
+    [q] = list(g.subjects(RDF.type, CW.InterventionalQuery))
+    answers = list(g.subjects(CW.forQuery, q))
+    assert len(answers) == 2
+    assert (q, CW.hasCondition, None) in g
+    # The model and its graph travel with the answers, so every IRI resolves.
+    assert (model.iri, RDF.type, CW.CausalModel) in g
+    assert (ocg.iri, RDF.type, CW.OntologicalCausalGraph) in g
 
 
-def test_an_entity_scoped_interventional_query_is_not_about_that_entity():
-    """Population-level questions carry the entity on the act, never as aboutEntity."""
+def test_the_service_logs_a_hypothetical_counterfactual_unit_as_conditions():
     pytest.importorskip("fastapi")
-    from service.api.main import _answers_turtle
+    from service.api.main import _log_queries
 
-    ocg = _toy_ocg()
-    project = type("_P", (), {"model": _FakeModel(ocg)})()
-    entity = "http://example.org/patient/1"
-    payload, _, _ = _answers_turtle(project, [{
-        "answer_id": 1, "kind": "interventional", "target": "Patient.survival",
-        "entity": entity, "predicted": "alive", "effect": None,
-        "estimand": "unit-scoped", "interventions": {"Patient.stage": "III"},
-        "reference": {}, "conditions": {}, "evidence": {},
+    ocg = clinic_ocg()
+    [(query, answers)] = _log_queries(_project(FakeModel(ocg)), [{
+        "answer_id": 1, "kind": "counterfactual", "entity": None,
+        "estimand": "P(V_{Patient.smoking=No} | a hypothetical unit)",
+        "interventions": {"Patient.smoking": "No"},
+        "observed": {"Patient.smoking": "Yes", "Patient.survival": "Short"},
+        "board": {"Patient.survival": {"predicted": "Long", "probability": 0.6,
+                                       "factual": "Short"}},
     }])
-    from rdflib import Graph
-    g = Graph().parse(data=payload.decode(), format="turtle")
-    assert (None, CW.onEntity, URIRef(entity)) in g
-    assert (None, CW.aboutEntity, URIRef(entity)) not in g
+    assert query.entity is None
+    assert {(c.node, c.value) for c in query.conditions} == {
+        ("Patient.smoking", "Yes"), ("Patient.survival", "Short")}
+    assert [a.factual for a in answers] == ["Short"]
 
 
-def test_no_bare_triple_is_asserted_about_the_entity():
-    """§6.1: the annotation export never says `entity property value`."""
-    ocg = _toy_ocg()
-    model = _FakeModel(ocg)
-    entity = "http://example.org/patient/1"
-    q = Query(kind="counterfactual", model_id="test-model",
-              target=["Patient.survival"], entity=entity,
-              interventions=[Intervention(node="Patient.stage", value="I",
-                                          entity=entity)])
-    a = Answer(kind="counterfactual", target="Patient.survival",
-               entity=entity, predicted="alive")
+def test_the_service_drops_what_the_cw_model_cannot_say():
+    pytest.importorskip("fastapi")
+    from service.api.main import _log_queries
 
-    g = queries_to_rdf([(q, a)], model)
-    from_entity = list(g.predicate_objects(URIRef(entity)))
-    assert [p for p, _ in from_entity] == [CW.hasQuery]
+    ocg = clinic_ocg()
+    pairs = _log_queries(_project(FakeModel(ocg)), [
+        # an interventional question about one entity: that is a counterfactual
+        {"answer_id": 1, "kind": "interventional", "entity": PATIENT_0,
+         "target": "Patient.survival", "predicted": "Long",
+         "interventions": {"Hospital.careQuality": "High"}},
+        # the treatment arm of a contrast still exports; the reference arm is not a term
+        {"answer_id": 2, "kind": "interventional", "entity": None,
+         "target": "Patient.survival", "predicted": "Long", "effect": 0.17,
+         "distribution": {"Long": 0.6, "Short": 0.4},
+         "interventions": {"Hospital.careQuality": "High"},
+         "reference": {"Hospital.careQuality": "Low"}},
+    ])
+    [(query, answers)] = pairs
+    assert [(iv.node, iv.value) for iv in query.interventions] == [("Hospital.careQuality", "High")]
+    assert answers[0].probability == pytest.approx(0.6)
+
+
+def test_asking_twice_is_one_query_and_the_latest_answer_wins():
+    pytest.importorskip("fastapi")
+    from service.api.main import _log_queries
+
+    ocg = clinic_ocg()
+    rec = {"kind": "conditional", "entity": None, "evidence": {"Patient.smoking": "Yes"},
+           "interventions": {}, "target": "Patient.survival"}
+    pairs = _log_queries(_project(FakeModel(ocg)), [
+        {**rec, "answer_id": 1, "predicted": "Short"},
+        {**rec, "answer_id": 2, "predicted": "Long"},
+    ])
+    [(_, answers)] = pairs
+    assert [a.predicted for a in answers] == ["Long"]

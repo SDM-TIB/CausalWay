@@ -1,301 +1,427 @@
 @prefix cw: <http://sdm-causalway.org/> .
-@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/0_1> a cw:CausalEdge ;
+cw:CausalDiscoveryRun a rdfs:Class ;
+    rdfs:label "CausalDiscoveryRun" ;
+    rdfs:comment "One execution of a causal-discovery method (or of expert curation) over one knowledge graph." .
+
+cw:CausalEdge a rdfs:Class ;
+    rdfs:label "CausalEdge" ;
+    rdfs:comment "A directed causal edge of one graph, with the relational path along which the cause reaches the effect." .
+
+cw:CausalMechanism a rdfs:Class ;
+    rdfs:label "CausalMechanism" ;
+    rdfs:comment "The mechanism a structural causal model assigned to one node." .
+
+cw:CausalModel a rdfs:Class ;
+    rdfs:label "CausalModel" ;
+    rdfs:comment "A causal model fitted on one causal graph: a structural causal model (one mechanism per node) or a causal Bayesian network (one CPT per node)." .
+
+cw:CausalNode a rdfs:Class ;
+    rdfs:label "CausalNode" ;
+    rdfs:comment "A causal node (D_p, p, R_p) of one graph: property p, scoped to the domain class D_p and the range R_p." .
+
+cw:Condition a rdfs:Class ;
+    rdfs:label "Condition" ;
+    rdfs:comment "Z = z: one node observed at one value." .
+
+cw:ConditionalAnswer a rdfs:Class ;
+    rdfs:label "ConditionalAnswer" ;
+    rdfs:comment "The answer to a cw:ConditionalQuery for one target node." .
+
+cw:ConditionalQuery a rdfs:Class ;
+    rdfs:label "ConditionalQuery" ;
+    rdfs:comment "P(V | Z = z): what the targets are observed to be in the (sub-)population selected by the conditions." .
+
+cw:CounterfactualAnswer a rdfs:Class ;
+    rdfs:label "CounterfactualAnswer" ;
+    rdfs:comment "The answer to a cw:CounterfactualQuery for one target node." .
+
+cw:CounterfactualQuery a rdfs:Class ;
+    rdfs:label "CounterfactualQuery" ;
+    rdfs:comment "P(V_{do(X = x)} | e): what the targets would have been for one unit e — a named entity or a hand-described unit — had X been x." .
+
+cw:Intervention a rdfs:Class ;
+    rdfs:label "Intervention" ;
+    rdfs:comment "do(X = x): one node set to one value." .
+
+cw:InterventionalAnswer a rdfs:Class ;
+    rdfs:label "InterventionalAnswer" ;
+    rdfs:comment "The answer to a cw:InterventionalQuery for one target node." .
+
+cw:InterventionalQuery a rdfs:Class ;
+    rdfs:label "InterventionalQuery" ;
+    rdfs:comment "P(V | do(X = x), Z = z): what the targets would be in the (sub-)population if X were set to x." .
+
+cw:ModelFittingRun a rdfs:Class ;
+    rdfs:label "ModelFittingRun" ;
+    rdfs:comment "One execution of model fitting that produced a cw:CausalModel." .
+
+cw:OntologicalCausalGraph a rdfs:Class ;
+    rdfs:label "OntologicalCausalGraph" ;
+    rdfs:comment "A discovered ontological causal graph G = (N, E_N): a DAG over causal nodes (D_p, p, R_p)." .
+
+cw:Parameter a rdfs:Class ;
+    rdfs:label "Parameter" ;
+    rdfs:comment "One named setting of a run: a seed, a significance level, maxhop, topologicalConstraint, and so on." .
+
+cw:aboutEntity a rdf:Property ;
+    rdfs:label "aboutEntity" ;
+    rdfs:comment "Counterfactual only: the individual of the source KG the query is about." .
+
+cw:artifactChecksum a rdf:Property ;
+    rdfs:label "artifactChecksum" ;
+    rdfs:comment "sha256 of the saved model file (scm.pkl), so a reader can check that the artifact at hand is the one that produced an answer." .
+
+cw:byMethod a rdf:Property ;
+    rdfs:label "byMethod" ;
+    rdfs:comment "The method a run executed: GES, PC, NOTEARS, ... for discovery, 'curated' for an expert-assembled graph, dowhy.gcm or pgmpy for fitting." .
+
+cw:cause a rdf:Property ;
+    rdfs:label "cause" ;
+    rdfs:comment "The causal node an edge starts from." .
+
+cw:curated a rdf:Property ;
+    rdfs:label "curated" ;
+    rdfs:comment "True iff an expert reviewed the edge and kept it (or added it)." .
+
+cw:discoveredBy a rdf:Property ;
+    rdfs:label "discoveredBy" ;
+    rdfs:comment "The cw:CausalDiscoveryRun that produced this graph." .
+
+cw:discoveredTime a rdf:Property ;
+    rdfs:label "discoveredTime" ;
+    rdfs:comment "When the discovery run finished." .
+
+cw:domain a rdf:Property ;
+    rdfs:label "domain" ;
+    rdfs:comment "Domain class D_p of a causal node. Deliberately not rdfs:domain, whose entailment would make the node an rdf:Property and intersect domains globally." .
+
+cw:effect a rdf:Property ;
+    rdfs:label "effect" ;
+    rdfs:comment "The causal node an edge points to." .
+
+cw:evaluatedBy a rdf:Property ;
+    rdfs:label "evaluatedBy" ;
+    rdfs:comment "The cw:CausalModel that computed this answer." .
+
+cw:evaluatedTime a rdf:Property ;
+    rdfs:label "evaluatedTime" ;
+    rdfs:comment "When this answer was computed." .
+
+cw:factualValue a rdf:Property ;
+    rdfs:label "factualValue" ;
+    rdfs:comment "Counterfactual only: what the node actually was for the unit." .
+
+cw:fittedBy a rdf:Property ;
+    rdfs:label "fittedBy" ;
+    rdfs:comment "The cw:ModelFittingRun that produced this model." .
+
+cw:fittedTime a rdf:Property ;
+    rdfs:label "fittedTime" ;
+    rdfs:comment "When the fitting run finished." .
+
+cw:forQuery a rdf:Property ;
+    rdfs:label "forQuery" ;
+    rdfs:comment "The query this answer answers." .
+
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Hospital.airPollution-09cc1900__Hospital.careQuality-8f1268f5> a cw:CausalEdge ;
     rdfs:label "Hospital.airPollution --[ε]--> Hospital.careQuality" ;
-    cw:cause <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> ;
-    cw:effect <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.airPollution-09cc1900> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.careQuality-8f1268f5> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/0_7> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Hospital.airPollution-09cc1900__Patient.tumorStage-5b1f8307> a cw:CausalEdge ;
     rdfs:label "Hospital.airPollution --[treatedAt (inverse)]--> Patient.tumorStage" ;
-    cw:cause <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> ;
-    cw:effect <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.airPollution-09cc1900> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.tumorStage-5b1f8307> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaPath "^<http://causalkg.example.org/synthetic/treatedAt>" ;
-    cw:viaRelation <http://causalkg.example.org/synthetic/treatedAt> ;
+    cw:viaRelationalPath "^<http://causalkg.example.org/synthetic/treatedAt>" ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/10_6> a cw:CausalEdge ;
-    rdfs:label "Therapy.toxicity --[receives (inverse)]--> Patient.survival" ;
-    cw:cause <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
-    cw:effect <http://sdm-causalway.org/node/Patient.survival-34e72eae> ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaPath "^<http://causalkg.example.org/synthetic/receives>" ;
-    cw:viaRelation <http://causalkg.example.org/synthetic/receives> ;
-    cw:weight 1e+00 .
-
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/1_6> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Hospital.careQuality-8f1268f5__Patient.survival-34e72eae> a cw:CausalEdge ;
     rdfs:label "Hospital.careQuality --[treatedAt (inverse)]--> Patient.survival" ;
-    cw:cause <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> ;
-    cw:effect <http://sdm-causalway.org/node/Patient.survival-34e72eae> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.careQuality-8f1268f5> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.survival-34e72eae> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaPath "^<http://causalkg.example.org/synthetic/treatedAt>" ;
-    cw:viaRelation <http://causalkg.example.org/synthetic/treatedAt> ;
+    cw:viaRelationalPath "^<http://causalkg.example.org/synthetic/treatedAt>" ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/2_0> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Hospital.region-ef08c4e5__Hospital.airPollution-09cc1900> a cw:CausalEdge ;
     rdfs:label "Hospital.region --[ε]--> Hospital.airPollution" ;
-    cw:cause <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> ;
-    cw:effect <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.region-ef08c4e5> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.airPollution-09cc1900> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/2_1> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Hospital.region-ef08c4e5__Hospital.careQuality-8f1268f5> a cw:CausalEdge ;
     rdfs:label "Hospital.region --[ε]--> Hospital.careQuality" ;
-    cw:cause <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> ;
-    cw:effect <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.region-ef08c4e5> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.careQuality-8f1268f5> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/3_7> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Patient.age-4dbfd8ef__Patient.tumorStage-5b1f8307> a cw:CausalEdge ;
     rdfs:label "Patient.age --[ε]--> Patient.tumorStage" ;
-    cw:cause <http://sdm-causalway.org/node/Patient.age-4dbfd8ef> ;
-    cw:effect <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.age-4dbfd8ef> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.tumorStage-5b1f8307> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/4_7> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Patient.geneticRisk-f8c8424f__Patient.tumorStage-5b1f8307> a cw:CausalEdge ;
     rdfs:label "Patient.geneticRisk --[ε]--> Patient.tumorStage" ;
-    cw:cause <http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f> ;
-    cw:effect <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.geneticRisk-f8c8424f> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.tumorStage-5b1f8307> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/5_7> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Patient.smoking-fccb5af1__Patient.tumorStage-5b1f8307> a cw:CausalEdge ;
     rdfs:label "Patient.smoking --[ε]--> Patient.tumorStage" ;
-    cw:cause <http://sdm-causalway.org/node/Patient.smoking-fccb5af1> ;
-    cw:effect <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.smoking-fccb5af1> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.tumorStage-5b1f8307> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/7_6> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Patient.tumorStage-5b1f8307__Patient.survival-34e72eae> a cw:CausalEdge ;
     rdfs:label "Patient.tumorStage --[ε]--> Patient.survival" ;
-    cw:cause <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
-    cw:effect <http://sdm-causalway.org/node/Patient.survival-34e72eae> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.tumorStage-5b1f8307> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.survival-34e72eae> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/7_8> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Patient.tumorStage-5b1f8307__Therapy.dosage-eecb994a> a cw:CausalEdge ;
     rdfs:label "Patient.tumorStage --[receives (forward)]--> Therapy.dosage" ;
-    cw:cause <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> ;
-    cw:effect <http://sdm-causalway.org/node/Therapy.dosage-eecb994a> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.tumorStage-5b1f8307> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.dosage-eecb994a> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation <http://causalkg.example.org/synthetic/receives> ;
+    cw:viaRelationalPath "<http://causalkg.example.org/synthetic/receives>" ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/8_10> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Therapy.dosage-eecb994a__Therapy.toxicity-24758fb0> a cw:CausalEdge ;
     rdfs:label "Therapy.dosage --[ε]--> Therapy.toxicity" ;
-    cw:cause <http://sdm-causalway.org/node/Therapy.dosage-eecb994a> ;
-    cw:effect <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.dosage-eecb994a> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.toxicity-24758fb0> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/9_10> a cw:CausalEdge ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Therapy.drugClass-f347a825__Therapy.toxicity-24758fb0> a cw:CausalEdge ;
     rdfs:label "Therapy.drugClass --[ε]--> Therapy.toxicity" ;
-    cw:cause <http://sdm-causalway.org/node/Therapy.drugClass-f347a825> ;
-    cw:effect <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.drugClass-f347a825> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.toxicity-24758fb0> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:viaRelation cw:epsilon ;
     cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/0> a cw:NodeSlot ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/Therapy.toxicity-24758fb0__Patient.survival-34e72eae> a cw:CausalEdge ;
+    rdfs:label "Therapy.toxicity --[receives (inverse)]--> Patient.survival" ;
+    cw:cause <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.toxicity-24758fb0> ;
+    cw:curated false ;
+    cw:effect <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.survival-34e72eae> ;
     cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 0 ;
-    cw:slotNode <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> .
+    cw:viaRelationalPath "^<http://causalkg.example.org/synthetic/receives>" ;
+    cw:weight 1e+00 .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/1> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 1 ;
-    cw:slotNode <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> .
+cw:hasCondition a rdf:Property ;
+    rdfs:label "hasCondition" ;
+    rdfs:comment "A condition of the query (the set Z). On a counterfactual, the observed state of a hand-described unit." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/10> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 10 ;
-    cw:slotNode <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> .
+cw:hasIntervention a rdf:Property ;
+    rdfs:label "hasIntervention" ;
+    rdfs:comment "An intervention of the query (the set X; several = a joint do())." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/2> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 2 ;
-    cw:slotNode <http://sdm-causalway.org/node/Hospital.region-ef08c4e5> .
+cw:hasMechanism a rdf:Property ;
+    rdfs:label "hasMechanism" ;
+    rdfs:comment "A cw:CausalMechanism of this model, one per node." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/3> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 3 ;
-    cw:slotNode <http://sdm-causalway.org/node/Patient.age-4dbfd8ef> .
+cw:hasParameter a rdf:Property ;
+    rdfs:label "hasParameter" ;
+    rdfs:comment "A cw:Parameter of this run." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/4> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 4 ;
-    cw:slotNode <http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f> .
+cw:inGraph a rdf:Property ;
+    rdfs:label "inGraph" ;
+    rdfs:comment "The graph a node or an edge belongs to (exactly one)." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/5> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 5 ;
-    cw:slotNode <http://sdm-causalway.org/node/Patient.smoking-fccb5af1> .
+cw:invertible a rdf:Property ;
+    rdfs:label "invertible" ;
+    rdfs:comment "Whether the mechanism's noise can be abducted from an observation — i.e. whether a counterfactual on this node is defined." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/6> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 6 ;
-    cw:slotNode <http://sdm-causalway.org/node/Patient.survival-34e72eae> .
+cw:mechanismType a rdf:Property ;
+    rdfs:label "mechanismType" ;
+    rdfs:comment "Class name of the mechanism, e.g. InvertibleClassifierFCM." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/7> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 7 ;
-    cw:slotNode <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> .
+cw:observedValue a rdf:Property ;
+    rdfs:label "observedValue" ;
+    rdfs:comment "The value a condition observes." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/8> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 8 ;
-    cw:slotNode <http://sdm-causalway.org/node/Therapy.dosage-eecb994a> .
+cw:onGraph a rdf:Property ;
+    rdfs:label "onGraph" ;
+    rdfs:comment "The causal graph a query is posed on, or a model is fitted on." .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/9> a cw:NodeSlot ;
-    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
-    cw:slotIndex 9 ;
-    cw:slotNode <http://sdm-causalway.org/node/Therapy.drugClass-f347a825> .
+cw:onNode a rdf:Property ;
+    rdfs:label "onNode" ;
+    rdfs:comment "The causal node an intervention, condition, answer or mechanism is about." .
 
-<http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9> a cw:DiscoveryRun,
-        prov:Activity ;
-    rdfs:label "Causal discovery run: GES-Prior" ;
-    cw:hasParameter <http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/constrained> ;
-    cw:method "GES-Prior" ;
-    cw:sourceKG "http://localhost:7200/repositories/syn_clinic" ;
-    cw:usedTopologicalConstraint false ;
-    prov:endedAtTime "2026-09-23T08:49:38+00:00"^^xsd:dateTime ;
-    prov:used "http://localhost:7200/repositories/syn_clinic" .
+cw:onProperty a rdf:Property ;
+    rdfs:label "onProperty" ;
+    rdfs:comment "Shortcut: the cw:property of cw:onNode." .
 
-<http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/constrained> a cw:Parameter ;
-    cw:parameterKind "bool" ;
-    cw:parameterName "constrained" ;
-    cw:parameterValue "false" .
+cw:parameterName a rdf:Property ;
+    rdfs:label "parameterName" ;
+    rdfs:comment "Name of a parameter, e.g. 'seed' or 'maxhop'." .
 
-<http://sdm-causalway.org/node/Patient.age-4dbfd8ef> a cw:PropertyNode ;
+cw:parameterValue a rdf:Property ;
+    rdfs:label "parameterValue" ;
+    rdfs:comment "Value of a parameter, as a typed literal (xsd:integer, xsd:double, xsd:boolean or a plain string)." .
+
+cw:predictedValue a rdf:Property ;
+    rdfs:label "predictedValue" ;
+    rdfs:comment "The answer: the most probable value of a categorical node, the mean of a continuous one." .
+
+cw:probability a rdf:Property ;
+    rdfs:label "probability" ;
+    rdfs:comment "Categorical nodes only: the probability of cw:predictedValue." .
+
+cw:property a rdf:Property ;
+    rdfs:label "property" ;
+    rdfs:comment "The property p of a causal node." .
+
+cw:range a rdf:Property ;
+    rdfs:label "range" ;
+    rdfs:comment "Range R_p of a causal node: a class for an object property, a datatype for a data property. Deliberately not rdfs:range, for the reason given at cw:domain." .
+
+cw:setValue a rdf:Property ;
+    rdfs:label "setValue" ;
+    rdfs:comment "The value an intervention sets its node to." .
+
+cw:sourceKG a rdf:Property ;
+    rdfs:label "sourceKG" ;
+    rdfs:comment "The knowledge graph a run read: a file name or a SPARQL endpoint." .
+
+cw:std a rdf:Property ;
+    rdfs:label "std" ;
+    rdfs:comment "Continuous nodes only: the standard deviation around cw:predictedValue." .
+
+cw:viaRelationalPath a rdf:Property ;
+    rdfs:label "viaRelationalPath" ;
+    rdfs:comment "The relational path from the cause's domain to the effect's domain, as a SPARQL 1.1 property path: '<p>' a forward hop, '^<p>' an inverse hop, '/' a sequence. Absent on an intra-class (epsilon) edge, whose cause and effect belong to one entity." .
+
+cw:weight a rdf:Property ;
+    rdfs:label "weight" ;
+    rdfs:comment "Method-assigned strength of the edge (a coefficient or a score). In a curated graph, the fraction of discovery runs that proposed the edge. Absent on an edge an expert added by hand." .
+
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.age-4dbfd8ef> a cw:CausalNode ;
     rdfs:label "Patient.age" ;
     cw:domain <http://causalkg.example.org/synthetic/Patient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/age> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.geneticRisk-f8c8424f> a cw:CausalNode ;
     rdfs:label "Patient.geneticRisk" ;
     cw:domain <http://causalkg.example.org/synthetic/Patient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/geneticRisk> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Patient.smoking-fccb5af1> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.smoking-fccb5af1> a cw:CausalNode ;
     rdfs:label "Patient.smoking" ;
     cw:domain <http://causalkg.example.org/synthetic/Patient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/smoking> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Therapy.drugClass-f347a825> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.drugClass-f347a825> a cw:CausalNode ;
     rdfs:label "Therapy.drugClass" ;
     cw:domain <http://causalkg.example.org/synthetic/Therapy> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/drugClass> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Hospital.region-ef08c4e5> a cw:PropertyNode ;
+<http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9> a cw:CausalDiscoveryRun ;
+    cw:byMethod "GES-Prior" ;
+    cw:discoveredTime "2026-09-23T08:49:38+00:00"^^xsd:dateTime ;
+    cw:hasParameter <http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/constrained>,
+        <http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/maxhop>,
+        <http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/topologicalConstraint> ;
+    cw:sourceKG "http://localhost:7200/repositories/syn_clinic" .
+
+<http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/constrained> a cw:Parameter ;
+    cw:parameterName "constrained" ;
+    cw:parameterValue false .
+
+<http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/maxhop> a cw:Parameter ;
+    cw:parameterName "maxhop" ;
+    cw:parameterValue 1 ;
+    rdfs:comment "Maximum number of object-property hops a relational path may take for an effect to pass between two classes." .
+
+<http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9/parameter/topologicalConstraint> a cw:Parameter ;
+    cw:parameterName "topologicalConstraint" ;
+    cw:parameterValue false ;
+    rdfs:comment "Whether Assumption 1 was enforced: an edge is allowed only between nodes linked by a relational path of at most maxhop hops." .
+
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.region-ef08c4e5> a cw:CausalNode ;
     rdfs:label "Hospital.region" ;
     cw:domain <http://causalkg.example.org/synthetic/Hospital> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/region> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Therapy.dosage-eecb994a> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.dosage-eecb994a> a cw:CausalNode ;
     rdfs:label "Therapy.dosage" ;
     cw:domain <http://causalkg.example.org/synthetic/Therapy> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/dosage> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Hospital.airPollution-09cc1900> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.airPollution-09cc1900> a cw:CausalNode ;
     rdfs:label "Hospital.airPollution" ;
     cw:domain <http://causalkg.example.org/synthetic/Hospital> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/airPollution> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Hospital.careQuality-8f1268f5> a cw:CausalNode ;
     rdfs:label "Hospital.careQuality" ;
     cw:domain <http://causalkg.example.org/synthetic/Hospital> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/careQuality> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Patient.survival-34e72eae> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.survival-34e72eae> a cw:CausalNode ;
     rdfs:label "Patient.survival" ;
     cw:domain <http://causalkg.example.org/synthetic/Patient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/survival> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Therapy.toxicity-24758fb0> a cw:CausalNode ;
     rdfs:label "Therapy.toxicity" ;
     cw:domain <http://causalkg.example.org/synthetic/Therapy> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/toxicity> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307> a cw:PropertyNode ;
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/node/Patient.tumorStage-5b1f8307> a cw:CausalNode ;
     rdfs:label "Patient.tumorStage" ;
     cw:domain <http://causalkg.example.org/synthetic/Patient> ;
-    cw:nodeKind "data" ;
+    cw:inGraph <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> ;
     cw:property <http://causalkg.example.org/synthetic/tumorStage> ;
     cw:range xsd:string .
 
-<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> a cw:OntologicalCausalGraph,
-        prov:Entity ;
-    rdfs:label "Ontological causal graph (GES-Prior)" ;
-    cw:edgeCount 13 ;
-    cw:hasEdge <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/0_1>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/0_7>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/10_6>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/1_6>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/2_0>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/2_1>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/3_7>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/4_7>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/5_7>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/7_6>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/7_8>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/8_10>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/edge/9_10> ;
-    cw:hasNode <http://sdm-causalway.org/node/Hospital.airPollution-09cc1900>,
-        <http://sdm-causalway.org/node/Hospital.careQuality-8f1268f5>,
-        <http://sdm-causalway.org/node/Hospital.region-ef08c4e5>,
-        <http://sdm-causalway.org/node/Patient.age-4dbfd8ef>,
-        <http://sdm-causalway.org/node/Patient.geneticRisk-f8c8424f>,
-        <http://sdm-causalway.org/node/Patient.smoking-fccb5af1>,
-        <http://sdm-causalway.org/node/Patient.survival-34e72eae>,
-        <http://sdm-causalway.org/node/Patient.tumorStage-5b1f8307>,
-        <http://sdm-causalway.org/node/Therapy.dosage-eecb994a>,
-        <http://sdm-causalway.org/node/Therapy.drugClass-f347a825>,
-        <http://sdm-causalway.org/node/Therapy.toxicity-24758fb0> ;
-    cw:hasNodeSlot <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/0>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/1>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/10>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/2>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/3>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/4>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/5>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/6>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/7>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/8>,
-        <http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9/slot/9> ;
-    cw:nodeCount 11 ;
-    prov:wasGeneratedBy <http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9> .
+<http://sdm-causalway.org/graph/GES-Prior-f8f537ce75f9> a cw:OntologicalCausalGraph ;
+    cw:discoveredBy <http://sdm-causalway.org/run/GES-Prior-f8f537ce75f9> .
 

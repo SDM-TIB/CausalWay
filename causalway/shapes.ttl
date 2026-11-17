@@ -1,0 +1,426 @@
+# SHACL shapes for the cw: model — what a valid causal graph, causal model,
+# query and answer look like.  Terms are defined in `causalway/vocab.py`
+# (snapshot: `ontology.ttl`); this file states how they may be combined.
+#
+# It is not documentation: `tests/test_shapes.py` validates real exports against
+# it — the graph, the model, and all three kinds of query with their answers —
+# and deliberately broken data against it, so a shape that stops matching what
+# the mappings emit fails the suite instead of rotting.
+#
+# Severity: a Violation is data that contradicts the model; a Warning is data
+# that is legal but suspicious (a value outside its declared range, which a
+# discretised numeric node produces legitimately).
+#
+# What SHACL cannot check here, and why:
+#   * that a value is a level the model knows — the levels live in the model's
+#     manifest, not in RDF;
+#   * that cw:aboutEntity is an instance of the right class, or that
+#     cw:factualValue is what the source KG holds — that needs the source KG in
+#     the data graph, and a query export does not carry it;
+#   * Assumption 1 for a multi-hop path — checking the hops against the T-Box
+#     needs a parser for the path literal, which SPARQL has no grammar for.
+#     Only intra-class edges and single-hop paths are checked;
+#   * that cw:probability belongs to the arg-max level — the distribution is not
+#     exported, by design.
+
+@prefix cw:   <http://sdm-causalway.org/> .
+@prefix cwsh: <http://sdm-causalway.org/shapes/> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+cwsh:prefixes
+    sh:declare [ sh:prefix "cw" ;   sh:namespace "http://sdm-causalway.org/"^^xsd:anyURI ] ,
+               [ sh:prefix "rdfs" ; sh:namespace "http://www.w3.org/2000/01/rdf-schema#"^^xsd:anyURI ] ,
+               [ sh:prefix "rdf" ;  sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^xsd:anyURI ] .
+
+# =========================================================================== #
+# Causal graph
+# =========================================================================== #
+
+cwsh:GraphShape a sh:NodeShape ;
+    sh:targetClass cw:OntologicalCausalGraph ;
+    sh:property [ sh:path cw:discoveredBy ; sh:minCount 1 ; sh:maxCount 1 ;
+                  sh:class cw:CausalDiscoveryRun ] .
+
+cwsh:DiscoveryRunShape a sh:NodeShape ;
+    sh:targetClass cw:CausalDiscoveryRun ;
+    sh:property [ sh:path cw:sourceKG ;       sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:byMethod ;       sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:discoveredTime ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:dateTime ] ;
+    sh:property [ sh:path cw:hasParameter ;   sh:class cw:Parameter ] .
+
+cwsh:FittingRunShape a sh:NodeShape ;
+    sh:targetClass cw:ModelFittingRun ;
+    sh:property [ sh:path cw:sourceKG ;     sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:byMethod ;     sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:fittedTime ;   sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:dateTime ] ;
+    sh:property [ sh:path cw:hasParameter ; sh:class cw:Parameter ] .
+
+# A run's parameter names are unique — on either kind of run.
+cwsh:RunParametersShape a sh:NodeShape ;
+    sh:targetClass cw:CausalDiscoveryRun , cw:ModelFittingRun ;
+    sh:sparql [
+        sh:message "The run has two parameters named {?name}." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?name WHERE {
+                $this cw:hasParameter ?p1, ?p2 .
+                ?p1 cw:parameterName ?name . ?p2 cw:parameterName ?name .
+                FILTER (STR(?p1) < STR(?p2))
+            }""" ] .
+
+cwsh:ParameterShape a sh:NodeShape ;
+    sh:targetClass cw:Parameter ;
+    sh:property [ sh:path cw:parameterName ;  sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:parameterValue ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ;
+    sh:property [ sh:path rdfs:comment ;      sh:maxCount 1 ; sh:datatype xsd:string ] .
+
+cwsh:NodeShape a sh:NodeShape ;
+    sh:targetClass cw:CausalNode ;
+    sh:property [ sh:path rdfs:label ;  sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:inGraph ;  sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:OntologicalCausalGraph ] ;
+    sh:property [ sh:path cw:domain ;   sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+    sh:property [ sh:path cw:property ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+    sh:property [ sh:path cw:range ;    sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+    # A node's identity is (D_p, p, R_p): no two nodes of one graph share it.
+    sh:sparql [
+        sh:message "Node duplicates {?other}: the same (domain, property, range) in one graph." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?other WHERE {
+                $this  cw:inGraph ?g ; cw:domain ?d ; cw:property ?p ; cw:range ?r .
+                ?other cw:inGraph ?g ; cw:domain ?d ; cw:property ?p ; cw:range ?r .
+                FILTER ($this != ?other)
+            }""" ] ;
+    # The graph is a DAG.  Exact because nodes are per graph and an edge may not
+    # leave its graph (EdgeShape): over shared nodes this path would follow the
+    # edges of other graphs and report cycles no single graph has.
+    sh:sparql [
+        sh:message "Node lies on a directed cycle: the causal graph is not a DAG." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this WHERE { $this (^cw:cause/cw:effect)+ $this . }""" ] .
+
+cwsh:EdgeShape a sh:NodeShape ;
+    sh:targetClass cw:CausalEdge ;
+    sh:property [ sh:path rdfs:label ;  sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:inGraph ;  sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:OntologicalCausalGraph ] ;
+    sh:property [ sh:path cw:cause ;    sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:CausalNode ;
+                  sh:disjoint cw:effect ;
+                  sh:message "An edge has exactly one cause, distinct from its effect (no self-loop)." ] ;
+    sh:property [ sh:path cw:effect ;   sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:CausalNode ] ;
+    sh:property [ sh:path cw:viaRelationalPath ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:curated ;  sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:boolean ] ;
+    sh:property [ sh:path cw:weight ;   sh:maxCount 1 ; sh:datatype xsd:double ] ;
+    sh:sparql [
+        sh:message "Edge endpoint {?n} is not a node of the edge's graph." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:inGraph ?g .
+                { $this cw:cause ?n } UNION { $this cw:effect ?n }
+                FILTER NOT EXISTS { ?n cw:inGraph ?g }
+            }""" ] ;
+    sh:sparql [
+        sh:message "Duplicate edge: {?other} has the same cause and effect." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?other WHERE {
+                $this  cw:cause ?c ; cw:effect ?e .
+                ?other a cw:CausalEdge ; cw:cause ?c ; cw:effect ?e .
+                FILTER ($this != ?other)
+            }""" ] ;
+    # Only a curated graph may hold a hand-drawn (weightless) edge.
+    sh:sparql [
+        sh:message "An edge without cw:weight must be curated: only an expert adds an edge no method weighed." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this WHERE {
+                $this cw:curated false .
+                FILTER NOT EXISTS { $this cw:weight ?w }
+            }""" ] .
+
+# Assumption 1, where the run enforced it (parameter topologicalConstraint = true).
+cwsh:AssumptionOneShape a sh:NodeShape ;
+    sh:targetClass cw:CausalEdge ;
+    # Intra-class half: an edge with no relational path joins one domain class.
+    sh:sparql [
+        sh:message "Assumption 1: an edge with no relational path joins {?dc} and {?de}, two domain classes." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?dc ?de WHERE {
+                $this cw:inGraph/cw:discoveredBy/cw:hasParameter ?p .
+                ?p cw:parameterName "topologicalConstraint" ; cw:parameterValue true .
+                $this cw:cause/cw:domain ?dc ; cw:effect/cw:domain ?de .
+                FILTER (?dc != ?de)
+                FILTER NOT EXISTS { $this cw:viaRelationalPath ?path }
+            }""" ] ;
+    # Single-hop half: '<p>' must run from the cause's class to the effect's, '^<p>'
+    # the other way.  Fires only when the source T-Box (rdfs:domain/range) is loaded.
+    sh:sparql [
+        sh:message "Assumption 1: the path {?path} does not lead from {?dc} to {?de}." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?path ?dc ?de WHERE {
+                $this cw:inGraph/cw:discoveredBy/cw:hasParameter ?p .
+                ?p cw:parameterName "topologicalConstraint" ; cw:parameterValue true .
+                $this cw:viaRelationalPath ?path ;
+                      cw:cause/cw:domain ?dc ; cw:effect/cw:domain ?de .
+                FILTER (REGEX(?path, "^\\\\^?<[^<>]*>$"))
+                BIND (IRI(REPLACE(?path, "^\\\\^?<([^<>]*)>$", "$1")) AS ?r)
+                BIND (STRSTARTS(?path, "^") AS ?inverse)
+                ?r rdfs:domain ?d1 ; rdfs:range ?d2 .
+                FILTER (IF(?inverse, ?dc != ?d2 || ?de != ?d1, ?dc != ?d1 || ?de != ?d2))
+            }""" ] .
+
+# =========================================================================== #
+# Causal model
+# =========================================================================== #
+
+cwsh:ModelShape a sh:NodeShape ;
+    sh:targetClass cw:CausalModel ;
+    sh:property [ sh:path cw:onGraph ;          sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:OntologicalCausalGraph ] ;
+    sh:property [ sh:path cw:fittedBy ;         sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:ModelFittingRun ] ;
+    sh:property [ sh:path cw:artifactChecksum ; sh:maxCount 1 ; sh:datatype xsd:string ;
+                  sh:pattern "^[0-9a-f]{64}$" ] ;
+    sh:property [ sh:path cw:hasMechanism ;     sh:class cw:CausalMechanism ] ;
+    sh:sparql [
+        sh:message "Mechanism node {?n} is not a node of the model's graph." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:onGraph ?g ; cw:hasMechanism/cw:onNode ?n .
+                FILTER NOT EXISTS { ?n cw:inGraph ?g }
+            }""" ] ;
+    sh:sparql [
+        sh:message "The model has two mechanisms for node {?n}." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:hasMechanism ?m1, ?m2 .
+                ?m1 cw:onNode ?n . ?m2 cw:onNode ?n .
+                FILTER (STR(?m1) < STR(?m2))
+            }""" ] .
+
+cwsh:MechanismShape a sh:NodeShape ;
+    sh:targetClass cw:CausalMechanism ;
+    sh:property [ sh:path cw:onNode ;        sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:CausalNode ] ;
+    sh:property [ sh:path cw:mechanismType ; sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path cw:invertible ;    sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:boolean ] .
+
+# =========================================================================== #
+# Queries
+# =========================================================================== #
+
+cwsh:QueryShape a sh:NodeShape ;
+    sh:targetClass cw:ConditionalQuery , cw:InterventionalQuery , cw:CounterfactualQuery ;
+    sh:property [ sh:path rdfs:label ;         sh:maxCount 1 ] ;
+    sh:property [ sh:path cw:onGraph ;         sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:OntologicalCausalGraph ] ;
+    sh:property [ sh:path cw:hasIntervention ; sh:class cw:Intervention ] ;
+    sh:property [ sh:path cw:hasCondition ;    sh:class cw:Condition ] ;
+    sh:sparql [
+        sh:message "Node {?n} is not a node of the query's graph." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:onGraph ?g .
+                { $this cw:hasIntervention/cw:onNode ?n } UNION { $this cw:hasCondition/cw:onNode ?n }
+                FILTER NOT EXISTS { ?n cw:inGraph ?g }
+            }""" ] ;
+    sh:sparql [
+        sh:message "Node {?n} is intervened on twice." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:hasIntervention ?i1, ?i2 .
+                ?i1 cw:onNode ?n . ?i2 cw:onNode ?n .
+                FILTER (STR(?i1) < STR(?i2))
+            }""" ] ;
+    sh:sparql [
+        sh:message "Node {?n} is conditioned on twice." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:hasCondition ?c1, ?c2 .
+                ?c1 cw:onNode ?n . ?c2 cw:onNode ?n .
+                FILTER (STR(?c1) < STR(?c2))
+            }""" ] .
+
+cwsh:ConditionalQueryShape a sh:NodeShape ;
+    sh:targetClass cw:ConditionalQuery ;
+    sh:not [ sh:or ( [ sh:class cw:InterventionalQuery ] [ sh:class cw:CounterfactualQuery ] ) ] ;
+    sh:property [ sh:path cw:hasIntervention ; sh:maxCount 0 ;
+                  sh:message "A conditional query has no intervention; a do() makes it interventional." ] ;
+    sh:property [ sh:path cw:aboutEntity ; sh:maxCount 0 ;
+                  sh:message "A conditional query is about a (sub-)population, not one entity." ] .
+
+cwsh:InterventionalQueryShape a sh:NodeShape ;
+    sh:targetClass cw:InterventionalQuery ;
+    sh:not [ sh:class cw:CounterfactualQuery ] ;
+    sh:property [ sh:path cw:hasIntervention ; sh:minCount 1 ] ;
+    sh:property [ sh:path cw:aboutEntity ; sh:maxCount 0 ;
+                  sh:message "An interventional query is about a (sub-)population; one entity is a counterfactual." ] ;
+    # X ∩ Z = ∅ on rungs 1-2.  A counterfactual is exempt on purpose.
+    sh:sparql [
+        sh:message "X ∩ Z ≠ ∅: {?n} is both intervened on and conditioned on." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:hasIntervention/cw:onNode ?n ; cw:hasCondition/cw:onNode ?n .
+            }""" ] .
+
+cwsh:CounterfactualQueryShape a sh:NodeShape ;
+    sh:targetClass cw:CounterfactualQuery ;
+    sh:property [ sh:path cw:hasIntervention ; sh:minCount 1 ] ;
+    sh:property [ sh:path cw:aboutEntity ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+    # A named unit (evidence in the source KG) or a hand-described one (evidence
+    # in the conditions) — exactly one of the two.
+    sh:xone ( [ sh:path cw:aboutEntity ;  sh:minCount 1 ]
+              [ sh:path cw:hasCondition ; sh:minCount 1 ] ) ;
+    sh:message "A counterfactual query has exactly one of cw:aboutEntity or cw:hasCondition." .
+
+cwsh:InterventionShape a sh:NodeShape ;
+    sh:targetClass cw:Intervention ;
+    sh:property [ sh:path cw:onNode ;     sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:CausalNode ] ;
+    sh:property [ sh:path cw:onProperty ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+    sh:property [ sh:path cw:setValue ;   sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRIOrLiteral ] ;
+    sh:property [ sh:path ( cw:onNode cw:property ) ; sh:equals cw:onProperty ;
+                  sh:message "cw:onProperty is not the cw:property of cw:onNode." ] .
+
+cwsh:ConditionShape a sh:NodeShape ;
+    sh:targetClass cw:Condition ;
+    sh:property [ sh:path cw:onNode ;        sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:CausalNode ] ;
+    sh:property [ sh:path cw:onProperty ;    sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+    sh:property [ sh:path cw:observedValue ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRIOrLiteral ] ;
+    sh:property [ sh:path ( cw:onNode cw:property ) ; sh:equals cw:onProperty ;
+                  sh:message "cw:onProperty is not the cw:property of cw:onNode." ] .
+
+# Warning, not violation: a value's datatype disagrees with R_p.  A discretised
+# numeric node ("(10, 20]" on an xsd:double property) trips this legitimately —
+# the admissible values are the model's, not the ontology's.  (Severity is a
+# property of the shape, so each warning lives in a shape of its own.)
+cwsh:ValueRangeShape a sh:NodeShape ;
+    sh:targetClass cw:Intervention , cw:Condition ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "Value {?v} does not match the node's range {?r}." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?v ?r WHERE {
+                $this cw:onNode/cw:range ?r .
+                { $this cw:setValue ?v } UNION { $this cw:observedValue ?v }
+                FILTER (IF(STRSTARTS(STR(?r), "http://www.w3.org/2001/XMLSchema#"),
+                           !isLiteral(?v) || (DATATYPE(?v) != ?r
+                               && !(?r = <http://www.w3.org/2001/XMLSchema#double>
+                                    && DATATYPE(?v) = <http://www.w3.org/2001/XMLSchema#integer>)),
+                           isLiteral(?v)))
+            }""" ] .
+
+# =========================================================================== #
+# Answers
+# =========================================================================== #
+
+cwsh:AnswerShape a sh:NodeShape ;
+    sh:targetClass cw:ConditionalAnswer , cw:InterventionalAnswer , cw:CounterfactualAnswer ;
+    sh:property [ sh:path cw:forQuery ;       sh:minCount 1 ; sh:maxCount 1 ] ;
+    sh:property [ sh:path cw:evaluatedBy ;    sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:CausalModel ] ;
+    sh:property [ sh:path cw:evaluatedTime ;  sh:minCount 1 ; sh:maxCount 1 ; sh:datatype xsd:dateTime ] ;
+    sh:property [ sh:path cw:onNode ;         sh:minCount 1 ; sh:maxCount 1 ; sh:class cw:CausalNode ] ;
+    sh:property [ sh:path cw:onProperty ;     sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRI ] ;
+    sh:property [ sh:path cw:predictedValue ; sh:minCount 1 ; sh:maxCount 1 ; sh:nodeKind sh:IRIOrLiteral ] ;
+    sh:property [ sh:path cw:probability ;    sh:maxCount 1 ; sh:datatype xsd:double ;
+                  sh:minInclusive 0 ; sh:maxInclusive 1 ] ;
+    sh:property [ sh:path cw:std ;            sh:maxCount 1 ; sh:datatype xsd:double ; sh:minInclusive 0 ] ;
+    sh:property [ sh:path ( cw:onNode cw:property ) ; sh:equals cw:onProperty ;
+                  sh:message "cw:onProperty is not the cw:property of cw:onNode." ] ;
+    # Categorical -> probability of the reported level; continuous -> sd.  Not both.
+    sh:not [ sh:and ( [ sh:path cw:probability ; sh:minCount 1 ]
+                      [ sh:path cw:std ;         sh:minCount 1 ] ) ] ;
+    # V ∩ X = ∅ on every rung: an intervened node's value is the intervention.
+    sh:sparql [
+        sh:message "V ∩ X ≠ ∅: the answer is about {?n}, which its query intervenes on." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:onNode ?n ; cw:forQuery/cw:hasIntervention/cw:onNode ?n .
+            }""" ] ;
+    sh:sparql [
+        sh:message "The answer's node {?n} is not a node of its query's graph." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:onNode ?n ; cw:forQuery/cw:onGraph ?g .
+                FILTER NOT EXISTS { ?n cw:inGraph ?g }
+            }""" ] ;
+    sh:sparql [
+        sh:message "Model {?m} was not fitted on the query's graph {?g}." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?m ?g WHERE {
+                $this cw:evaluatedBy ?m ; cw:forQuery/cw:onGraph ?g .
+                FILTER NOT EXISTS { ?m cw:onGraph ?g }
+            }""" ] ;
+    sh:sparql [
+        sh:message "Duplicate answer {?other}: the same query, model and node." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?other WHERE {
+                $this  cw:forQuery ?q ; cw:evaluatedBy ?m ; cw:onNode ?n .
+                ?other cw:forQuery ?q ; cw:evaluatedBy ?m ; cw:onNode ?n .
+                FILTER ($this != ?other)
+            }""" ] .
+
+cwsh:AnswerUncertaintyShape a sh:NodeShape ;
+    sh:targetClass cw:ConditionalAnswer , cw:InterventionalAnswer , cw:CounterfactualAnswer ;
+    sh:severity sh:Warning ;
+    sh:or ( [ sh:path cw:probability ; sh:minCount 1 ]
+            [ sh:path cw:std ;         sh:minCount 1 ] ) ;
+    sh:message "The answer carries neither cw:probability nor cw:std: its uncertainty is unknown." .
+
+cwsh:ConditionalAnswerShape a sh:NodeShape ;
+    sh:targetClass cw:ConditionalAnswer ;
+    sh:property [ sh:path cw:forQuery ; sh:class cw:ConditionalQuery ;
+                  sh:message "A ConditionalAnswer answers a ConditionalQuery." ] ;
+    sh:property [ sh:path cw:factualValue ; sh:maxCount 0 ] ;
+    sh:sparql [
+        sh:message "V ∩ Z ≠ ∅: the answer is about {?n}, which its query conditions on." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:onNode ?n ; cw:forQuery/cw:hasCondition/cw:onNode ?n .
+            }""" ] .
+
+cwsh:InterventionalAnswerShape a sh:NodeShape ;
+    sh:targetClass cw:InterventionalAnswer ;
+    sh:property [ sh:path cw:forQuery ; sh:class cw:InterventionalQuery ;
+                  sh:message "An InterventionalAnswer answers an InterventionalQuery." ] ;
+    sh:property [ sh:path cw:factualValue ; sh:maxCount 0 ] ;
+    sh:sparql [
+        sh:message "V ∩ Z ≠ ∅: the answer is about {?n}, which its query conditions on." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:onNode ?n ; cw:forQuery/cw:hasCondition/cw:onNode ?n .
+            }""" ] .
+
+# A counterfactual answer may be about a conditioned node — its evidence names
+# the very world it departs from.  Only V ∩ X = ∅ (AnswerShape) applies.
+cwsh:CounterfactualAnswerShape a sh:NodeShape ;
+    sh:targetClass cw:CounterfactualAnswer ;
+    sh:property [ sh:path cw:forQuery ; sh:class cw:CounterfactualQuery ;
+                  sh:message "A CounterfactualAnswer answers a CounterfactualQuery." ] ;
+    sh:property [ sh:path cw:factualValue ; sh:maxCount 1 ; sh:nodeKind sh:IRIOrLiteral ] .
+
+cwsh:CounterfactualInvertibilityShape a sh:NodeShape ;
+    sh:targetClass cw:CounterfactualAnswer ;
+    sh:severity sh:Warning ;
+    sh:sparql [
+        sh:message "The model's mechanism for {?n} is not invertible: this counterfactual is not identified." ;
+        sh:prefixes cwsh:prefixes ;
+        sh:select """
+            SELECT $this ?n WHERE {
+                $this cw:onNode ?n ; cw:evaluatedBy/cw:hasMechanism ?m .
+                ?m cw:onNode ?n ; cw:invertible false .
+            }""" ] .

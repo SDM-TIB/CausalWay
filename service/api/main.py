@@ -2296,6 +2296,12 @@ def fit_model(pid: str, body: FitRequest):
     else:
         p.cbn = p.cbn_infer = None
 
+    # The model's IRI names *this* fit. An SCM and a CBN fitted on one graph are
+    # two models — different engines, different answers — so the kind is part of
+    # the id, and the manifest records it for `model_export` (cw:byMethod).
+    model.manifest["model_kind"] = body.kind
+    if body.kind == "cbn" and not str(model.manifest.get("model_id", "")).endswith("-cbn"):
+        model.manifest["model_id"] = f"{model.manifest.get('model_id')}-cbn"
     p.model = model
     p.model_kind = body.kind
     p.model_key = key
@@ -2683,6 +2689,31 @@ def _answer_payload(ans, kind: str, extra: dict) -> dict:
         "coupling": ans.coupling,
         **extra,
     }
+
+
+def _board_log(nodes: dict, pinned: dict, factual: Optional[dict] = None) -> dict:
+    """A board's answers as the log keeps them: one entry per node that was not pinned.
+
+    Each entry carries what the cw: answer needs — the predicted value and, for a
+    categorical card, the probability of that value, for a numeric one its sd —
+    so the RDF export can write one `cw:*Answer` per node rather than a board
+    summary no mapping can read.
+    """
+    out = {}
+    for node, card in nodes.items():
+        if node in pinned or card.get("predicted") is None:
+            continue
+        probs = card.get("probs") or {}
+        entry = {"predicted": _py(card.get("predicted"))}
+        if probs:
+            entry["probability"] = _py(probs.get(card.get("predicted"),
+                                                 probs.get(str(card.get("predicted")))))
+        elif card.get("std") is not None:
+            entry["std"] = _py(card.get("std"))
+        if factual is not None and factual.get(node) is not None:
+            entry["factual"] = factual[node]
+        out[node] = entry
+    return out
 
 
 def _log_answer(p: ProjectState, payload: dict) -> dict:
@@ -3255,6 +3286,7 @@ def infer_predict(pid: str, body: PredictRequest):
     interventions = {k: _coerce(p, k, v) for k, v in body.interventions.items()}
 
     started = time.time()
+    pinned = {**evidence, **interventions}
     if p.model_kind == "cbn":
         nodes = _cbn_predict(p, evidence, interventions)
         backend, ess, n_samples = "pgmpy-exact", None, None
@@ -3263,7 +3295,6 @@ def infer_predict(pid: str, body: PredictRequest):
         samples, weights, ess = _joint_samples(model, evidence, interventions, n_samples)
         levels = (p.model_info or {}).get("levels", {})
         axes = _numeric_axes(p)
-        pinned = {**evidence, **interventions}
         nodes = {
             col: _weighted_dist(samples[col], model.spec.dtypes.get(col), weights,
                                 levels.get(col), axis=axes.get(col))
@@ -3303,7 +3334,7 @@ def infer_predict(pid: str, body: PredictRequest):
         "predicted": None, "distribution": None, "mean": None, "std": None, "ci": None,
         "factual": None, "effect": None, "backend": backend, "n_samples": n_samples,
         "ess": ess, "low_confidence": payload["low_confidence"], "coupling": None,
-        "board": {node: dist.get("predicted") for node, dist in nodes.items()},
+        "board": _board_log(nodes, pinned),
         "evidence": payload["evidence"], "conditions": {},
         "interventions": payload["interventions"],
     })
@@ -3516,8 +3547,12 @@ def infer_counterfactual_predict(pid: str, body: CfPredictRequest):
         "backend": "gumbel-max-abduction" if any_categorical else "anm-abduction",
         "n_samples": int(len(frame)), "ess": None, "low_confidence": False,
         "coupling": "gumbel-max" if any_categorical else None,
-        "board": {node: dist.get("predicted") for node, dist in nodes.items()},
+        "board": _board_log(nodes, interventions, factual),
         "evidence": {}, "conditions": {},
+        # A hypothetical unit's observed state is its evidence — in the cw: model,
+        # the counterfactual query's cw:hasCondition.
+        "observed": ({k: _py(v) for k, v in factual.items()}
+                     if body.observed is not None else None),
         "interventions": {k: _py(v) for k, v in interventions.items()},
     })
     # The board is also kept as a *world*, separately from the query log. A
@@ -3539,7 +3574,11 @@ def infer_counterfactual_predict(pid: str, body: CfPredictRequest):
         "observed": (dict(body.observed) if body.observed is not None else None),
         "estimand": estimand,
         "model_id": getattr(model, "model_id", None),
-        "computed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        # The logged answer's own timestamp, not a second clock reading: the same
+        # counterfactual answers are exported both from the log and as this world,
+        # and one cw:*Answer with two cw:evaluatedTime values is two answers.
+        "computed_at": datetime.fromtimestamp(p.answers[-1]["at"], timezone.utc)
+                               .isoformat(timespec="seconds"),
         "backend": "gumbel-max-abduction" if any_categorical else "anm-abduction",
         "coupling": "gumbel-max" if any_categorical else None,
         "n_samples": int(len(frame)),
@@ -3856,16 +3895,27 @@ def _curated_ocg(p: ProjectState) -> OntologicalCausalGraph:
     """The curated selection as a cw:OntologicalCausalGraph — what module 3 fits.
 
     This is the graph behind "Take n edges to inference": the edge set the user
-    settled on, as a first-class OCG instance rather than a list of pairs. Two
-    pieces of curation provenance ride along, because a curated graph that
-    cannot say where its edges came from is not reproducible:
-    ``cw:manuallyAdded`` marks the edges the analyst drew by hand, and
-    ``prov:wasDerivedFrom`` names the ``cw:DiscoveryRun``s the rest were
-    selected out of.
+    settled on, as a first-class OCG rather than a list of pairs. Its run's
+    `cw:byMethod` is "curated", and every edge is `cw:curated true` — an expert
+    reviewed it and kept it. Each edge's `cw:weight` is the fraction of discovery
+    runs that proposed it; an edge the user drew by hand has no weight, because
+    no method weighed it, and that absence is how the RDF tells the two apart.
+
+    Cached per selection. The model is fitted on this object and keeps its IRI
+    (`causalway.model._subset_ocg`), so the graph export and the model's
+    `cw:onGraph` must describe *one* resource — rebuilding it on every call would
+    stamp a new `cw:discoveredTime` each time and give that resource two.
     """
     ctx = p.discovery_context
     if ctx is None:
         raise HTTPException(400, "No discovery context, so no curated graph to build.")
+    key = (p.discovery_context_key, len(p.discovery_runs),
+           tuple(sorted(tuple(e) for e in p.selected_edges)),
+           tuple(sorted(tuple(e) for e in p.manual_edges)))
+    cached = getattr(p, "curated_cache", None)
+    if cached is not None and cached[0] == key:
+        return cached[1]
+
     names = list(ctx.column_names)
     index = {name: i for i, name in enumerate(names)}
     adj = np.zeros((len(names), len(names)), dtype=int)
@@ -3877,13 +3927,19 @@ def _curated_ocg(p: ProjectState) -> OntologicalCausalGraph:
         for s, t in (tuple(e) for e in p.manual_edges)
         if s in index and t in index
     }
-    return OntologicalCausalGraph.from_discovery(
-        adj, ctx.constraint_kept, method="curated",
-        params={"n_runs": len(p.discovery_runs), "n_manual": len(p.manual_edges)},
-        constrained=None, source=ctx.source,
-        manual_edges=manual,
-        derived_from=[str(_run_ocg(p, run).run_iri) for run in p.discovery_runs],
+    support = np.zeros(adj.shape, dtype=float)
+    for run in p.discovery_runs:
+        support += (np.asarray(run["adj"], dtype=float) != 0)
+    if p.discovery_runs:
+        support /= len(p.discovery_runs)
+    ocg = OntologicalCausalGraph.from_discovery(
+        adj, ctx.constraint_kept, weights=support, method="curated",
+        params={"nRuns": len(p.discovery_runs), "nManual": len(p.manual_edges)},
+        constrained=None, source=ctx.source, manual_edges=manual, curated=True,
     )
+    ocg.created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    p.curated_cache = (key, ocg)
+    return ocg
 
 
 def _curated_turtle(p: ProjectState) -> str:
@@ -3927,8 +3983,13 @@ def _run_ocg(p: ProjectState, run: dict) -> OntologicalCausalGraph:
     A run record keeps ``adj``/``weights``/``columns``, which is everything an
     OCG needs, so each run in the session is exportable as its own
     ``cw:OntologicalCausalGraph`` — with the seed that produced it. Node IRIs
-    are global, so several of these accumulate into one store and join on the
-    shared node resources (this is what ``results/*/all_methods.ttl`` is).
+    are per graph, so several of these accumulate into one store and compare on
+    ``(cw:domain, cw:property, cw:range)`` (this is what ``results/*/all_methods.ttl`` is).
+
+    The run record keeps the method's raw adjacency — the edge ledger shows an
+    undirected CPDAG edge in both directions on purpose — but the *exported* graph
+    is a DAG: ``to_dag(strategy="extension")`` orients each undirected edge within
+    the Markov equivalence class, seeded by the run's own seed, and records it.
     """
     ctx = p.discovery_context
     if ctx is None:
@@ -3942,7 +4003,7 @@ def _run_ocg(p: ProjectState, run: dict) -> OntologicalCausalGraph:
             "alpha": run["alpha"], "priors": run["priors"], "seed": run["seed"],
             "library": _algorithm_library(run["method"]),
         },
-    )
+    ).to_dag(strategy="extension")
 
 
 def _slugify(text: str) -> str:
@@ -4046,9 +4107,7 @@ def _artifacts(p: ProjectState) -> dict[str, dict]:
         "model": {
             "label": ("Fitted Bayesian network & CPT summary" if p.model_kind == "cbn"
                       else "Fitted SCM & mechanisms"),
-            # No turtle for a CBN: `CausalModel.to_rdf` describes gcm mechanisms, which
-            # a network of conditional probability tables does not have (W22).
-            "formats": ["json", "csv"] if p.model_kind == "cbn" else ["json", "csv", "turtle"],
+            "formats": ["json", "csv", "turtle"],
             "available": p.model is not None,
             "reason": "Fit a model in the Causal model panel.",
         },
@@ -4110,105 +4169,145 @@ def export_manifest(pid: str):
 def _cf_worlds_payload(p: ProjectState, fmt: str) -> tuple[bytes, str, str]:
     """The session's counterfactual worlds, as JSON or as cw: Turtle.
 
-    The JSON is the very document the RML mapping reads, so the two formats are
-    one artifact in two syntaxes rather than two hand-kept shapes.
+    A world is a `cw:CounterfactualQuery` with one `cw:CounterfactualAnswer` per
+    node (`causalway.cf_export`), so the JSON is the very document
+    `query_mapping.rml.ttl` reads and the Turtle is what it writes, with the
+    model that evaluated the worlds and its graph alongside.
 
-    `dtypes` is passed through because the datatype of an exported value is
-    decided by how the model *fitted* the column, not by the node's declared
-    `R_p`: a column the user discretised is a set of labels whatever
-    `xsd:double` the ontology claims, and typing it as a double would be a lie
-    the reader cannot detect. A world recorded before this was wired through
-    has no `dtypes` key, and its values simply export untyped.
+    `dtypes` decides each value's datatype: how the model *fitted* a column, not
+    the node's declared `R_p` — a discretised column is a set of labels whatever
+    `xsd:double` the ontology claims.
     """
     if not p.cf_worlds:
         raise HTTPException(400, "No counterfactual worlds yet.")
+    if p.model is None:
+        raise HTTPException(400, "The model that evaluated these worlds is gone; refit it.")
     from causalway.cf_export import (  # noqa: PLC0415 — heavy Plan 2 import
         CounterfactualWorld, worlds_to_json, worlds_to_rdf,
     )
 
-    ocg = _curated_ocg(p)
     worlds = [
         CounterfactualWorld(
             entity=w.get("entity"), interventions=w["interventions"],
             counterfactual=w["counterfactual"], factual=w["factual"],
             distribution=w.get("distribution") or {}, std=w.get("std") or {},
-            row_count=w.get("n_rows"), random_seed=w.get("random_seed"),
-            model_id=w.get("model_id"),
-            computed_at=w.get("computed_at"), coupling=w.get("coupling"),
-            label=w.get("estimand"),
+            label=w.get("estimand"), evaluated_time=w.get("computed_at"),
         )
         for w in p.cf_worlds
     ]
     dtypes = next((w["dtypes"] for w in reversed(p.cf_worlds) if w.get("dtypes")), None)
     if fmt == "turtle":
-        graph = worlds_to_rdf(worlds, ocg, dtypes=dtypes, with_vocabulary=True)
+        graph = _model_turtle_graph(p)
+        worlds_to_rdf(worlds, p.model, dtypes=dtypes, graph=graph)
         return graph.serialize(format="turtle").encode(), "text/turtle", "ttl"
-    return (json.dumps(worlds_to_json(worlds, ocg, dtypes=dtypes),
+    return (json.dumps(worlds_to_json(worlds, p.model, dtypes=dtypes),
                        indent=2, default=str).encode(),
             "application/json", "json")
 
 
-def _answers_turtle(p: ProjectState, records: list[dict]) -> tuple[bytes, str, str]:
-    """The module-3 query log as cw: Turtle, through `query_mapping.rml.ttl`.
+def _log_queries(p: ProjectState, records: list[dict]) -> list[tuple]:
+    """The session log as cw: `(Query, [Answer])` pairs — the shape `query_export` reads.
 
-    The session log is a flat dict per answer; the export rebuilds the `Query`
-    and `Answer` it came from so the RDF is produced by the same mapping the
-    engine and the CLI use, rather than by a second shape maintained here.
+    The log is a flat dict per request; this rebuilds the query each request
+    *was* in the cw: model — its interventions X, its conditions Z (observed
+    evidence and a sub-population filter are both Z), and for a counterfactual
+    its unit — and one `Answer` per node it answered. A board request answered
+    every free node; a single-target request answered one.
 
-    One asymmetry is deliberate, and it is the vocabulary's, not this function's:
-    an entity attached to a *conditional* or *interventional* query is not the
-    query's subject — those are population-level questions — so it travels as
-    `cw:onEntity` on each intervention. Only a counterfactual has a
-    `cw:aboutEntity`, which is why `Query` refuses `entity=` for the other two.
+    Asking the same question twice is one query: the IRI is minted from its
+    content. So answers are keyed by (query, node) and the latest one wins —
+    two values under one `cw:*Answer` IRI would be two contradictory answers.
+
+    Skipped, because the cw: model has no place for them: an interventional
+    request scoped to one entity (a question about one unit is a counterfactual),
+    and a record whose reference arm was the point (the reference arm's own
+    prediction was never logged; the treatment arm still exports).
     """
-    if p.model is None:
-        raise HTTPException(400, "Fit a model before exporting answers as RDF.")
     from causalway.queries import (  # noqa: PLC0415 — heavy Plan 2 import
-        Answer, Condition, Intervention, Query,
+        Answer, Condition, Intervention, Query, query_iri,
     )
-    from causalway.query_export import queries_to_rdf
 
-    dtypes = (getattr(p.model, "manifest", None) or {}).get("dtypes")
-    pairs = []
+    queries: dict[str, Query] = {}
+    answers: dict[str, dict[str, Answer]] = {}
     for rec in records:
         kind = rec.get("kind")
         if kind not in ("conditional", "interventional", "counterfactual"):
             continue
-        entity = rec.get("entity")
-        act_entity = entity if kind != "conditional" else None
-        query = Query(
-            kind=kind,
-            model_id=p.model.model_id or "unfitted",
-            target=[rec["target"]],
-            interventions=[
-                Intervention(node=k, value=v, entity=act_entity)
-                for k, v in (rec.get("interventions") or {}).items()
-            ],
-            reference=[
-                Intervention(node=k, value=v)
-                for k, v in (rec.get("reference") or {}).items()
-            ],
-            evidence=[
-                Condition(node=k, value=v)
-                for k, v in (rec.get("evidence") or {}).items()
-            ],
-            condition_on=[
-                Condition(node=k, value=v)
-                for k, v in (rec.get("conditions") or {}).items()
-            ],
-            entity=entity if kind == "counterfactual" else None,
-            label=rec.get("estimand"),
-        )
-        answer = Answer(
-            kind=kind, target=rec["target"], entity=entity,
-            predicted=rec.get("predicted"), effect=rec.get("effect"),
-            factual=rec.get("factual"), coupling=rec.get("coupling"),
-        )
-        pairs.append((query, answer))
-    if not pairs:
-        raise HTTPException(400, "None of those answers carry a replayable query.")
+        entity = rec.get("entity") if kind == "counterfactual" else None
+        if kind == "interventional" and rec.get("entity"):
+            continue
+        observed = rec.get("observed") if kind == "counterfactual" else None
+        z = ({**(rec.get("evidence") or {}), **(rec.get("conditions") or {})}
+             if kind != "counterfactual" else (observed or {}))
+        try:
+            query = Query(
+                kind=kind,
+                interventions=[Intervention(node=k, value=v)
+                               for k, v in (rec.get("interventions") or {}).items()],
+                conditions=[Condition(node=k, value=v) for k, v in z.items()],
+                entity=entity, graph_id=p.model.spec.ocg.gid, label=rec.get("estimand"),
+            )
+        except ValueError:
+            continue
+        excluded = query.excluded_targets()
+        at = datetime.fromtimestamp(rec.get("at") or time.time(), timezone.utc)
+        stamp = at.isoformat(timespec="seconds")
+        board = rec.get("board")
+        if isinstance(board, dict):
+            per_node = board
+        else:
+            dist = rec.get("distribution") or {}
+            per_node = {rec.get("target"): {
+                "predicted": rec.get("predicted"),
+                "probability": dist.get(str(rec.get("predicted"))) if dist else None,
+                "std": rec.get("std"), "factual": rec.get("factual"),
+            }}
+        key = str(query_iri(query))
+        queries.setdefault(key, query)
+        mine = answers.setdefault(key, {})
+        for node, entry in per_node.items():
+            if not isinstance(entry, dict) or node in excluded or entry.get("predicted") is None:
+                continue
+            probability = entry.get("probability")
+            mine[node] = Answer(
+                kind=kind, target=node, entity=entity, predicted=entry["predicted"],
+                distribution=({entry["predicted"]: probability}
+                              if probability is not None else None),
+                std=entry.get("std"),
+                factual=entry.get("factual") if kind == "counterfactual" else None,
+                evaluated_time=stamp,
+            )
+    return [(queries[k], list(answers[k].values())) for k in queries]
 
-    graph = queries_to_rdf(pairs, p.model, dtypes=dtypes, with_vocabulary=True)
+
+def _model_turtle_graph(p: ProjectState):
+    """The fitted model and the graph it was fitted on, in one rdflib graph.
+
+    Every RDF export that mentions the model starts from this, so an answer's
+    `cw:evaluatedBy` and a query's `cw:onGraph` always resolve inside the file
+    that mentions them — a trace that ends at an undefined IRI is not a trace.
+    """
+    graph = p.model.to_rdf(with_vocabulary=True)
+    if p.model.spec.ocg is not None:
+        p.model.spec.ocg.to_rdf(graph=graph)
+    return graph
+
+
+def _answers_turtle(p: ProjectState, records: list[dict]) -> tuple[bytes, str, str]:
+    """The module 3-4 query log as cw: Turtle — queries, answers, model and graph.
+
+    Built by the same mapping the engine and the CLI use (`query_mapping.rml.ttl`),
+    from the pairs `_log_queries` rebuilds, so there is no second shape here.
+    """
+    if p.model is None:
+        raise HTTPException(400, "Fit a model before exporting answers as RDF.")
+    from causalway.query_export import queries_to_rdf  # noqa: PLC0415
+
+    pairs = _log_queries(p, records)
+    if not pairs:
+        raise HTTPException(400, "None of those answers carry a query the cw: model can express.")
+    graph = _model_turtle_graph(p)
+    queries_to_rdf(pairs, p.model, graph=graph)
     return graph.serialize(format="turtle").encode(), "text/turtle", "ttl"
 
 
@@ -4257,14 +4356,20 @@ def _render(p: ProjectState, what: str, fmt: str,
         return as_json(_curated_ocg(p).to_json())
     if what == "learned_graphs":
         graphs = _learned_graphs(p, select)
-        if fmt == "turtle":
-            from rdflib import Graph as _Graph  # noqa: PLC0415
-            store = _Graph()
-            vocabulary(store)
-            for ocg in graphs:
-                ocg.to_rdf(graph=store)
-            return store.serialize(format="turtle").encode(), "text/turtle", "ttl"
-        return as_json([ocg.to_json() for ocg in graphs])
+        # A run whose *directed* edges already form a cycle (a non-CPDAG method can
+        # return one) has no orientation that fixes it, and the export refuses a
+        # cyclic graph rather than publish one. That is the user's to resolve.
+        try:
+            if fmt == "turtle":
+                from rdflib import Graph as _Graph  # noqa: PLC0415
+                store = _Graph()
+                vocabulary(store)
+                for ocg in graphs:
+                    ocg.to_rdf(graph=store)
+                return store.serialize(format="turtle").encode(), "text/turtle", "ttl"
+            return as_json([ocg.to_json() for ocg in graphs])
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     if what == "cf_worlds":
         return _cf_worlds_payload(p, fmt)
     if what == "priors":
@@ -4285,13 +4390,9 @@ def _render(p: ProjectState, what: str, fmt: str,
                     else p.model.mechanism_table().to_dict(orient="records"))
             return pd.DataFrame(rows).to_csv(index=False).encode(), "text/csv", "csv"
         if fmt == "turtle":
-            if p.model_kind == "cbn":
-                raise HTTPException(400, (
-                    "`CausalModel.to_rdf` describes gcm mechanisms, which a causal "
-                    "Bayesian network does not have. Export the model as JSON or CSV, "
-                    "or refit as a structural causal model."
-                ))
-            return (p.model.to_rdf().serialize(format="turtle").encode(),
+            # A CBN is a cw:CausalModel too — fitted by pgmpy, with no per-node
+            # mechanisms to list (its CPTs are its parameters).
+            return (_model_turtle_graph(p).serialize(format="turtle").encode(),
                     "text/turtle", "ttl")
         return as_json(p.model_info or _model_payload(p))
     if what == "evaluation":

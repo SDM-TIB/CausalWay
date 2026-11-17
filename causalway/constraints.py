@@ -92,12 +92,16 @@ class EdgeConstraint:
     labels: ``(i, j) -> [label, ...]`` where each label is either a single
         ``(relation, "forward"|"inverse")`` tuple, ``(EPSILON, "epsilon")``, or
         (for multi-hop relaxations) a tuple of such hop tuples.
+    max_hops: the longest relational path the labels were built with, or
+        ``None`` when unknown.  Recorded so a graph discovered under this
+        constraint can export it as its run's ``maxhop`` parameter.
     """
 
     names: list
     nodes: list
     allowed: np.ndarray
     labels: dict = field(default_factory=dict)
+    max_hops: Optional[int] = None
 
     # ------------------------------------------------------------------ #
     # Construction
@@ -131,6 +135,7 @@ class EdgeConstraint:
             nodes=list(nodes),
             allowed=allowed,
             labels=labels,
+            max_hops=max_hops,
         )
 
     # ------------------------------------------------------------------ #
@@ -152,7 +157,8 @@ class EdgeConstraint:
             for nj, j in enumerate(idx)
             if (i, j) in self.labels
         }
-        return EdgeConstraint(names=names, nodes=nodes, allowed=allowed, labels=labels)
+        return EdgeConstraint(names=names, nodes=nodes, allowed=allowed, labels=labels,
+                              max_hops=self.max_hops)
 
     def skeleton_allowed(self) -> np.ndarray:
         """Undirected skeleton view: ``allowed | allowed.T``."""

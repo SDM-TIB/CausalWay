@@ -1,41 +1,39 @@
 """A fitted causal model → JSON → RDF, through SDM-RDFizer.
 
-Why this module exists
-----------------------
-``CausalModel.to_rdf`` built the Layer A triples by hand, which left it as the
-last export in the project whose shape lived in Python.  It also still emitted
-``cw:parameters`` — a *legacy* term (see ``vocab.py``), holding a JSON literal,
-retired everywhere else precisely because SDM-RDFizer rewrites both quote
-characters through ``rml:reference`` and a JSON object is all quotes.  Moving
-this export onto a mapping fixes both at once: the fit run's hyper-parameters
-become ``cw:Parameter`` resources with a name, a value and a kind, exactly as
-a discovery run's already are.
+Why a model is in the knowledge graph at all
+--------------------------------------------
+A query is posed on a *graph*; its answers are evaluated by a *model*
+(``cw:evaluatedBy``).  Without a description of that model an answer cannot
+be traced: two models fitted on one graph — different seeds, different data,
+an SCM and a CBN — answer the same query differently.  So a model is exported
+as a ``cw:CausalModel`` that names its graph, the ``cw:ModelFittingRun`` that
+produced it (source KG, library, time, seed, training rows), the mechanism of
+every node, and the sha256 of its saved artifact.
 
-No new vocabulary is minted for that.  ``cw:hasParameter`` / ``cw:Parameter``
-were described for ``cw:DiscoveryRun``; a ``cw:ModelFitRun`` is the same sort of
-activity and reuses them, which is what the subtractive rule in
-``CLAUDE.md`` asks for.
+The fitted parameters themselves — sklearn estimators inside ``scm.pkl`` — are
+deliberately *not* in RDF.  Tracing needs to identify the model; reproducing
+an answer needs the artifact, and ``cw:artifactChecksum`` is what ties the two
+together.
+
+Of everything a mechanism could say, one fact is kept besides its class:
+``cw:invertible``, because whether a node's noise can be abducted is whether a
+counterfactual about it is defined.  Held-out performance is an evaluation
+result, not a property of the model's identity, and is not exported here.
 """
 
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
-from rdflib import Graph
+from rdflib import Graph, RDFS, XSD
 
 from .rdfizer import check_quote_free, materialise
-from .result import _param_entry, _slug
-from .vocab import (
-    CW,
-    GRAPH_STEM,
-    MODEL_RUN_STEM,
-    MODEL_STEM,
-    PROV,
-    vocabulary,
-)
+from .result import parameter_rows
+from .vocab import CW, GRAPH_STEM, MODEL_RUN_STEM, MODEL_STEM, vocabulary
 
-__all__ = ["model_to_json", "model_to_rdf", "MODEL_MAPPING_PATH"]
+__all__ = ["model_to_json", "model_to_rdf", "MODEL_MAPPING_PATH", "model_kind"]
 
 #: The RML mapping that defines the JSON -> RDF contract for a fitted model.
 MODEL_MAPPING_PATH = os.path.join(
@@ -43,7 +41,24 @@ MODEL_MAPPING_PATH = os.path.join(
 )
 
 #: JSON fields carrying an IRI, exempt from the engine's quote rewriting.
-_IRI_FIELDS = {"model_iri", "run_iri", "graph_iri"}
+_IRI_FIELDS = {"graph_iri", "run_iri", "parameter_iri", "node_iri", "mechanism_iri",
+               "datatype"}
+
+#: ``cw:byMethod`` of the fitting run, per model kind.
+_FIT_METHOD = {"scm": "dowhy.gcm", "cbn": "pgmpy"}
+
+
+def model_kind(model) -> str:
+    """``"scm"`` or ``"cbn"`` — recorded in the manifest by whoever fitted the model."""
+    return (getattr(model, "manifest", None) or {}).get("model_kind", "scm")
+
+
+def _graph_iri(model) -> Optional[str]:
+    ocg = getattr(getattr(model, "spec", None), "ocg", None)
+    if ocg is not None:
+        return str(ocg.iri)
+    gid = (model.manifest or {}).get("ocg_gid")
+    return f"{GRAPH_STEM}{gid}" if gid else None
 
 
 def model_to_json(model) -> dict:
@@ -55,63 +70,62 @@ def model_to_json(model) -> dict:
     """
     manifest = model.manifest or {}
     model_key = model.model_id or "unfitted"
+    kind = model_kind(model)
+    run_iri = f"{MODEL_RUN_STEM}{model_key}"
 
-    row = {
-        "model_key": model_key,
-        "model_iri": str(model.iri),
-        "run_iri": str(model.run_iri),
-        "label": f"Causal model {model_key}",
-        "library": "dowhy.gcm",
-        "library_version": manifest.get("versions", {}).get("dowhy", "unknown"),
-        "training_rows": str(int(manifest.get("training_rows", 0) or 0)),
-    }
-    gid = manifest.get("ocg_gid")
-    if gid:
-        row["graph_iri"] = f"{GRAPH_STEM}{gid}"
+    row = {"model_key": model_key, "run_iri": run_iri}
+    graph_iri = _graph_iri(model)
+    if graph_iri:
+        row["graph_iri"] = graph_iri
+    if manifest.get("artifact_sha256"):
+        row["checksum"] = str(manifest["artifact_sha256"])
+
     source = manifest.get("source_kg") or {}
-    # A literal, not an IRI: the source may be a filesystem path, and the
-    # export says where the data came from rather than minting a resource for it.
-    trained_on = source.get("path") or source.get("url")
-    if trained_on:
-        row["trained_on"] = str(trained_on)
+    versions = manifest.get("versions", {}) or {}
+    run_row = {
+        "run_key": model_key,
+        "method": _FIT_METHOD.get(kind, kind),
+        # A literal, not an IRI: the source may be a filesystem path, and the
+        # export says where the data came from rather than minting a resource.
+        "source": str(source.get("path") or source.get("url") or "unknown"),
+        "fitted_time": str(manifest.get("fitted_at")
+                           or datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    }
 
-    run_row = {"run_key": model_key}
-    fitted_at = manifest.get("fitted_at")
-    if fitted_at:
-        run_row["ended_at"] = str(fitted_at)
-
-    parameters = []
-    for name in ("quality", "categorical_counterfactual", "random_state"):
-        kind, text = _param_entry(name, manifest.get(name))
-        record = {
-            "run_key": model_key,
-            "param_key": _slug(name),
-            "name": name,
-            "kind": kind,
-        }
-        # An *empty* reference is not an absent one to SDM-RDFizer — it writes
-        # the literal "None" — so a null parameter carries no cw:parameterValue
-        # at all and cw:parameterKind alone tells the two apart on the way back.
-        if text != "":
-            record["value"] = text
-        parameters.append(record)
+    params = {
+        "seed": manifest.get("random_state"),
+        "trainingRows": int(manifest.get("training_rows", 0) or 0),
+        "libraryVersion": versions.get("pgmpy" if kind == "cbn" else "dowhy"),
+    }
+    if kind == "scm":
+        params["quality"] = manifest.get("quality")
+        params["categoricalCounterfactual"] = manifest.get("categorical_counterfactual")
+    plain, typed, links = parameter_rows(model_key, run_iri, params)
 
     mechanisms = []
-    for _, mech in model.mechanism_table().iterrows():
-        record = {
-            "model_key": model_key,
-            "node_slug": _slug(str(mech["node"])),
-            "mechanism_type": str(mech["mechanism_type"]),
-            "invertible": "true" if bool(mech["invertible"]) else "false",
-        }
-        if str(mech["mechanism_type"]) == "InvertibleClassifierFCM":
-            record["coupling"] = "gumbel-max"
-        mechanisms.append(record)
+    ocg = getattr(getattr(model, "spec", None), "ocg", None)
+    if kind == "scm" and ocg is not None and manifest.get("mechanisms_fitted", True):
+        index = {node.name: k for k, node in enumerate(ocg.nodes)}
+        for _, mech in model.mechanism_table().iterrows():
+            name = str(mech["node"])
+            if name not in index:
+                continue
+            node_key = ocg.node_key(index[name])
+            mechanisms.append({
+                "model_key": model_key,
+                "node_key": node_key,
+                "node_iri": str(ocg.node_iri(index[name])),
+                "mechanism_iri": f"{MODEL_STEM}{model_key}/mechanism/{node_key}",
+                "mechanism_type": str(mech["mechanism_type"]),
+                "invertible": "true" if bool(mech["invertible"]) else "false",
+            })
 
     return {
         "models": [row],
         "runs": [run_row],
-        "run_parameters": parameters,
+        "parameters": plain,
+        "parameters_typed": typed,
+        "run_parameters": links,
         "mechanisms": mechanisms,
     }
 
@@ -126,7 +140,8 @@ def model_to_rdf(model, *, graph: Optional[Graph] = None,
     """
     g = Graph() if graph is None else graph
     g.bind("cw", CW)
-    g.bind("prov", PROV)
+    g.bind("rdfs", RDFS)
+    g.bind("xsd", XSD)
     if with_vocabulary:
         vocabulary(g)
 

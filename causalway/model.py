@@ -39,7 +39,7 @@ from .nodes import PropertyNode, build_nodes
 from .ontology import OntologySchema
 from .result import OntologicalCausalGraph
 from .sources import CausalGraphSource, GraphSource, is_endpoint, load_ocg, resolve_schema
-from .vocab import CW, MODEL_RUN_STEM, MODEL_STEM, PROV
+from .vocab import MODEL_RUN_STEM, MODEL_STEM
 
 __all__ = ["ModelSpec", "CausalModel", "GRAPH_FILENAME"]
 
@@ -153,10 +153,20 @@ def _subset_ocg(ocg: OntologicalCausalGraph, keep_idx: list, rename_to: list) ->
         for nj, j in enumerate(keep_idx):
             if (i, j) in ocg.edge_labels:
                 edge_labels[(ni, nj)] = ocg.edge_labels[(i, j)]
+    # The model is fitted *on* this graph (cw:onGraph), so when the subset is the
+    # whole graph — same nodes, same names, same order — it keeps the graph's
+    # identity and the model points at the very resource the graph export wrote.
+    # A genuinely smaller graph is a different graph and gets its own content id.
+    whole = (list(keep_idx) == list(range(ocg.n))
+             and [n.name for n in rename_to] == [n.name for n in ocg.nodes])
+    position = {i: ni for ni, i in enumerate(keep_idx)}
     return OntologicalCausalGraph(
         nodes=list(rename_to), adj=adj, edge_labels=edge_labels, weights=weights,
         method=ocg.method, params=dict(ocg.params), constrained=ocg.constrained,
-        source=ocg.source, graph_id=ocg.graph_id,
+        source=ocg.source, graph_id=(ocg.graph_id or ocg.gid) if whole else None,
+        created_at=ocg.created_at, max_hops=ocg.max_hops, curated=ocg.curated,
+        manual_edges={(position[i], position[j]) for i, j in ocg.manual_edges
+                      if i in position and j in position},
     )
 
 
@@ -514,9 +524,18 @@ class CausalModel:
         from the recorded source KG when it is reachable, and says plainly what
         does not work when it is not.
         """
+        import hashlib
+
         import joblib
         os.makedirs(path, exist_ok=True)
-        joblib.dump(self.scm, os.path.join(path, "scm.pkl"))
+        pickle_path = os.path.join(path, "scm.pkl")
+        joblib.dump(self.scm, pickle_path)
+        # The checksum of the file just written becomes cw:artifactChecksum, so an
+        # answer's cw:evaluatedBy can be matched to the artifact that computed it.
+        # It is recorded on the live model too: every later export describes the
+        # artifact that now exists on disk.
+        with open(pickle_path, "rb") as fh:
+            self.manifest["artifact_sha256"] = hashlib.sha256(fh.read()).hexdigest()
 
         manifest = dict(self.manifest)
         if with_graph and self.spec.ocg is not None:
@@ -725,11 +744,9 @@ class CausalModel:
         """Serialise the fitted model (not the query/answer) as ``cw:CausalModel``.
 
         A thin wrapper over :func:`causalway.model_export.model_to_rdf`: the
-        shape of this export lives in ``model_mapping.rml.ttl``, not here.  The
-        hand-written version this replaced also emitted the legacy
-        ``cw:parameters`` JSON literal; the mapping emits ``cw:Parameter``
-        resources instead, the same way a discovery run's hyper-parameters have
-        been written since the RML export landed.
+        shape of this export lives in ``model_mapping.rml.ttl``, not here.  It is
+        what an answer's ``cw:evaluatedBy`` points at — the graph the model was
+        fitted on, its ``cw:ModelFittingRun`` and the mechanism of every node.
         """
         from .model_export import model_to_rdf
 

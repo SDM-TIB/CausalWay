@@ -200,7 +200,13 @@ def to_ocg(adj: np.ndarray, ctx: DiscoveryContext, constrained: bool,
 
     The constraint is always ``constraint_kept``: every run — constrained or
     not — is fitted on the kept columns, so that is the only node set whose
-    order matches ``adj``.  ``constrained`` records whether Assumption 1 was
+    order matches ``adj``.
+
+    The returned graph is a **DAG**: a CPDAG's undirected edges (PC, GES) are
+    oriented by ``to_dag(strategy="extension")`` — Assumption 1's one admissible
+    direction first, then a seeded choice within the Markov equivalence class,
+    never adding a v-structure — because that is the graph that gets exported and
+    fitted. Score discovery on the *raw* ``adj`` (``from_discovery``) instead.  ``constrained`` records whether Assumption 1 was
     *enforced*, which is provenance, not indexing.  The relation labels are
     ontological facts either way; an unconstrained run that returns a
     topologically invalid edge simply gets no label (see
@@ -209,7 +215,7 @@ def to_ocg(adj: np.ndarray, ctx: DiscoveryContext, constrained: bool,
     return OntologicalCausalGraph.from_discovery(
         adj, ctx.constraint_kept, weights=weights, method=method, params=params,
         constrained=constrained, source=source or getattr(ctx, "source", None),
-    )
+    ).to_dag(strategy="extension")
 
 
 def estimate_and_cache_priors(

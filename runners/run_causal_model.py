@@ -79,16 +79,21 @@ def cmd_query(args) -> int:
 
     if args.store:
         is_cf = args.kind == "counterfactual"
+        # In the cw: model Z is one set: observed evidence and a sub-population
+        # filter are both conditions. A counterfactual about a named entity takes
+        # its evidence from the KG, so it carries none. The reference arm is not
+        # stored — a contrast is two queries — and neither is an interventional
+        # --entity scope, which the model has no term for.
+        z = {} if is_cf else {**_parse_kv(args.evidence), **_parse_kv(args.condition_on)}
         query = Query(
-            kind=args.kind, model_id=model.model_id, target=[args.target],
+            kind=args.kind,
             interventions=[Intervention(node=k, value=v, entity=args.entity if is_cf else None)
-                          for k, v in do.items()],
-            evidence=[Condition(node=k, value=v) for k, v in _parse_kv(args.evidence).items()],
-            condition_on=[Condition(node=k, value=v) for k, v in _parse_kv(args.condition_on).items()],
+                           for k, v in do.items()],
+            conditions=[Condition(node=k, value=v) for k, v in z.items()],
             entity=args.entity if is_cf else None,
         )
         if model.spec.ocg is not None:
-            validate_query(query, model.spec.ocg, model.spec.mat)
+            validate_query(query, model.spec.ocg, model.spec.mat, targets=[args.target])
         g = store_query(answer, query, model, merge=args.merge)
         g.serialize(destination=args.store, format="turtle" if args.merge == "annotation" else "trig")
         print(f"Stored query+answer -> {args.store}")
