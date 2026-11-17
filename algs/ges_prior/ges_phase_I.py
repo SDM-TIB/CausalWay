@@ -20,7 +20,8 @@ from .operators.ges_search import fes, bes
 def ges_phase_i(data: pd.DataFrame,
                 use_cache: bool = True,
                 scoring_method: Optional[Union[str, BaseStructureScore]] = 'bic-g',
-                allowed: Optional[np.ndarray] = None
+                allowed: Optional[np.ndarray] = None,
+                legacy_ges: bool = False
 ) -> np.ndarray:
     """
     Estimate the CPDAG structure from data.
@@ -34,6 +35,10 @@ def ges_phase_i(data: pd.DataFrame,
     allowed : np.ndarray, optional
         (d, d) boolean matrix; ``allowed[i, j]`` means ``i -> j`` is valid.
         Enforced at the skeleton level during forward search.
+    legacy_ges : bool
+        If True, reproduce gCastle's original GES: its BES never deletes an
+        edge and its DAG -> CPDAG conversion is wrong for some DAGs. Only the
+        correctness experiment passes it.
 
     Returns
     -------
@@ -46,10 +51,10 @@ def ges_phase_i(data: pd.DataFrame,
     cpdag = np.zeros((d, d), dtype=int)
 
     # Phase 1: Forward search
-    cpdag = fes(cpdag, criterion, allowed)
+    cpdag = fes(cpdag, criterion, allowed, legacy=legacy_ges)
 
     # Phase 2: Backward search
-    cpdag = bes(cpdag, criterion, allowed)
+    cpdag = bes(cpdag, criterion, allowed, legacy=legacy_ges)
 
     return cpdag
 

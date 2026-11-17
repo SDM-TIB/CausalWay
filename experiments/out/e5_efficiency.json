@@ -1,0 +1,52 @@
+{
+  "stages": {
+    "synthetic_clinic": {
+      "schema_seconds": 0.19244695780798793,
+      "triples": 9854,
+      "n_classes": 3,
+      "constraint_seconds": 0.0001332499086856842,
+      "join_seconds": 3.6851537919137627,
+      "rows": 1240,
+      "columns": 11,
+      "pruning_rate": 0.16363636363636364
+    },
+    "SCLC_patients": {
+      "schema_seconds": 0.8311624170746654,
+      "triples": 47122,
+      "n_classes": 1,
+      "constraint_seconds": 4.075001925230026e-05,
+      "join_seconds": 0.4122547919396311,
+      "rows": 4279,
+      "columns": 10,
+      "pruning_rate": 0.0
+    }
+  },
+  "clinic": {
+    "discovery_seconds": 0.18616916611790657,
+    "fit_seconds": 17.996407834114507,
+    "n_model_nodes": 11,
+    "training_rows": 1240,
+    "observational_seconds": 0.02225499995984137,
+    "observational_backend": "mechanism",
+    "n_targets": 10,
+    "interventional_seconds": 0.31453541619703174,
+    "counterfactual_seconds": 0.17320545809343457,
+    "counterfactual_draws": 1000,
+    "export_seconds": 14.702453542035073,
+    "exported_triples": 535,
+    "n_answers": 30,
+    "roundtrip_adjacency_identical": true,
+    "shacl_seconds": 1.8158688750118017,
+    "shacl_conforms": true,
+    "n_shapes": 23,
+    "merged_triples": 10389,
+    "source_triples": 9854,
+    "path_query_seconds": 0.002390083158388734,
+    "path_query_pairs": 29,
+    "path_query_matches_closure": true,
+    "listing_query_seconds": 0.00596954207867384,
+    "listing_query_rows": 10,
+    "vocab_classes": 16,
+    "vocab_properties": 37
+  }
+}

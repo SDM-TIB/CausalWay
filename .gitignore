@@ -32,6 +32,7 @@ results.bak-*/
 # SDM-RDFizer output; regenerate with kgs/command.sh.
 kgs/output/
 *.log
+quickstart_causal_layer.ttl
 
 # --------------------------------------------------------------------- os --
 .DS_Store

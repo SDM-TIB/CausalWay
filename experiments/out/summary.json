@@ -1,0 +1,510 @@
+{
+  "e1": {
+    "runs": 80,
+    "corrected_is_cpdag": 80,
+    "legacy_is_cpdag": 46,
+    "legacy_differs_from_corrected": 34,
+    "corrected_bic_ge_legacy": 80,
+    "corrected_bic_ge_pgmpy": 77,
+    "corrected_bic_gt_pgmpy": 35,
+    "corrected_same_graph_as_pgmpy": 42,
+    "shd_corrected": "12.787 \u00b1 3.200",
+    "shd_legacy": "14.700 \u00b1 3.137",
+    "shd_pgmpy": "13.600 \u00b1 3.444",
+    "p_shd_corrected_vs_pgmpy": 0.0015328681831655736,
+    "seconds_corrected": 1.3138171906379283,
+    "seconds_pgmpy": 6.090135352112702
+  },
+  "e2": {
+    "kgs": 120,
+    "join_matches_generator": 120,
+    "join_seconds_by_rows": {
+      "250": 0.25824933339608835,
+      "1000": 2.2820617864374073,
+      "4000": 35.5131260083057
+    },
+    "by_classes": {
+      "GES-2": {
+        "method": "GES",
+        "classes": 2,
+        "nodes": 6,
+        "pruned %": 0.0,
+        "F1 unconstrained": "0.817 \u00b1 0.040",
+        "F1 post-hoc": "0.817 \u00b1 0.040",
+        "F1 pushed-down": "0.817 \u00b1 0.040",
+        "SHD unconstrained": "3.433 \u00b1 0.695",
+        "SHD post-hoc": "3.433 \u00b1 0.695",
+        "SHD pushed-down": "3.433 \u00b1 0.695",
+        "forbidden edges (unconstr.)": 0.0,
+        "speed-up": 1.0,
+        "p F1 push vs free": 1.0,
+        "p F1 push vs post": 1.0,
+        "FP in replicated classes %": 88.6,
+        "F1 + entity check": "0.902 \u00b1 0.036",
+        "SHD + entity check": "2.500 \u00b1 0.785",
+        "precision pushed-down": "0.772 \u00b1 0.065",
+        "precision + entity check": "0.927 \u00b1 0.041",
+        "recall pushed-down": "0.918 \u00b1 0.049",
+        "recall + entity check": "0.906 \u00b1 0.056",
+        "p SHD entity vs push": 0.0005941217629162848
+      },
+      "GES-3": {
+        "method": "GES",
+        "classes": 3,
+        "nodes": 9,
+        "pruned %": 24.8,
+        "F1 unconstrained": "0.731 \u00b1 0.055",
+        "F1 post-hoc": "0.731 \u00b1 0.055",
+        "F1 pushed-down": "0.731 \u00b1 0.055",
+        "SHD unconstrained": "8.167 \u00b1 1.561",
+        "SHD post-hoc": "8.167 \u00b1 1.561",
+        "SHD pushed-down": "8.167 \u00b1 1.561",
+        "forbidden edges (unconstr.)": 0.0,
+        "speed-up": 1.33,
+        "p F1 push vs free": 1.0,
+        "p F1 push vs post": 1.0,
+        "FP in replicated classes %": 62.9,
+        "F1 + entity check": "0.763 \u00b1 0.054",
+        "SHD + entity check": "6.500 \u00b1 1.443",
+        "precision pushed-down": "0.686 \u00b1 0.066",
+        "precision + entity check": "0.822 \u00b1 0.064",
+        "recall pushed-down": "0.813 \u00b1 0.047",
+        "recall + entity check": "0.728 \u00b1 0.057",
+        "p SHD entity vs push": 2.8613013047577794e-05
+      },
+      "GES-5": {
+        "method": "GES",
+        "classes": 5,
+        "nodes": 15,
+        "pruned %": 51.5,
+        "F1 unconstrained": "0.619 \u00b1 0.044",
+        "F1 post-hoc": "0.654 \u00b1 0.042",
+        "F1 pushed-down": "0.644 \u00b1 0.045",
+        "SHD unconstrained": "19.733 \u00b1 1.884",
+        "SHD post-hoc": "17.333 \u00b1 1.435",
+        "SHD pushed-down": "17.767 \u00b1 1.520",
+        "forbidden edges (unconstr.)": 2.17,
+        "speed-up": 2.37,
+        "p F1 push vs free": 0.005376355536826798,
+        "p F1 push vs post": 0.07118923429208963,
+        "FP in replicated classes %": 38.4,
+        "F1 + entity check": "0.687 \u00b1 0.047",
+        "SHD + entity check": "13.500 \u00b1 1.364",
+        "precision pushed-down": "0.550 \u00b1 0.051",
+        "precision + entity check": "0.701 \u00b1 0.068",
+        "recall pushed-down": "0.816 \u00b1 0.054",
+        "recall + entity check": "0.707 \u00b1 0.052",
+        "p SHD entity vs push": 3.5212934026179754e-06
+      },
+      "GES-8": {
+        "method": "GES",
+        "classes": 8,
+        "nodes": 24,
+        "pruned %": 68.2,
+        "F1 unconstrained": "0.573 \u00b1 0.029",
+        "F1 post-hoc": "0.636 \u00b1 0.032",
+        "F1 pushed-down": "0.620 \u00b1 0.026",
+        "SHD unconstrained": "35.567 \u00b1 2.209",
+        "SHD post-hoc": "28.933 \u00b1 1.765",
+        "SHD pushed-down": "30.967 \u00b1 1.711",
+        "forbidden edges (unconstr.)": 6.47,
+        "speed-up": 3.92,
+        "p F1 push vs free": 7.865557863029543e-06,
+        "p F1 push vs post": 0.010995017215526998,
+        "FP in replicated classes %": 37.5,
+        "F1 + entity check": "0.620 \u00b1 0.034",
+        "SHD + entity check": "24.433 \u00b1 1.909",
+        "precision pushed-down": "0.520 \u00b1 0.032",
+        "precision + entity check": "0.641 \u00b1 0.045",
+        "recall pushed-down": "0.795 \u00b1 0.045",
+        "recall + entity check": "0.625 \u00b1 0.047",
+        "p SHD entity vs push": 2.48133923175465e-06
+      },
+      "PC-2": {
+        "method": "PC",
+        "classes": 2,
+        "nodes": 6,
+        "pruned %": 0.0,
+        "F1 unconstrained": "0.663 \u00b1 0.053",
+        "F1 post-hoc": "0.663 \u00b1 0.053",
+        "F1 pushed-down": "0.663 \u00b1 0.053",
+        "SHD unconstrained": "5.567 \u00b1 0.938",
+        "SHD post-hoc": "5.567 \u00b1 0.938",
+        "SHD pushed-down": "5.567 \u00b1 0.938",
+        "forbidden edges (unconstr.)": 0.0,
+        "speed-up": 1.07,
+        "p F1 push vs free": 1.0,
+        "p F1 push vs post": 1.0,
+        "FP in replicated classes %": 37.1
+      },
+      "PC-3": {
+        "method": "PC",
+        "classes": 3,
+        "nodes": 9,
+        "pruned %": 24.8,
+        "F1 unconstrained": "0.667 \u00b1 0.051",
+        "F1 post-hoc": "0.678 \u00b1 0.052",
+        "F1 pushed-down": "0.682 \u00b1 0.051",
+        "SHD unconstrained": "9.400 \u00b1 1.249",
+        "SHD post-hoc": "9.200 \u00b1 1.304",
+        "SHD pushed-down": "9.333 \u00b1 1.356",
+        "forbidden edges (unconstr.)": 0.2,
+        "speed-up": 1.18,
+        "p F1 push vs free": 0.0663160312989308,
+        "p F1 push vs post": 0.5929800980174267,
+        "FP in replicated classes %": 60.0
+      },
+      "PC-5": {
+        "method": "PC",
+        "classes": 5,
+        "nodes": 15,
+        "pruned %": 51.5,
+        "F1 unconstrained": "0.578 \u00b1 0.043",
+        "F1 post-hoc": "0.623 \u00b1 0.039",
+        "F1 pushed-down": "0.617 \u00b1 0.038",
+        "SHD unconstrained": "21.233 \u00b1 1.701",
+        "SHD post-hoc": "18.400 \u00b1 1.311",
+        "SHD pushed-down": "18.767 \u00b1 1.377",
+        "forbidden edges (unconstr.)": 2.77,
+        "speed-up": 1.67,
+        "p F1 push vs free": 0.00036362623264516694,
+        "p F1 push vs post": 0.10243990540645079,
+        "FP in replicated classes %": 36.8
+      },
+      "PC-8": {
+        "method": "PC",
+        "classes": 8,
+        "nodes": 24,
+        "pruned %": 68.2,
+        "F1 unconstrained": "0.511 \u00b1 0.031",
+        "F1 post-hoc": "0.584 \u00b1 0.033",
+        "F1 pushed-down": "0.583 \u00b1 0.033",
+        "SHD unconstrained": "40.000 \u00b1 2.587",
+        "SHD post-hoc": "32.000 \u00b1 1.707",
+        "SHD pushed-down": "33.300 \u00b1 2.151",
+        "forbidden edges (unconstr.)": 7.9,
+        "speed-up": 2.17,
+        "p F1 push vs free": 1.862645149230957e-08,
+        "p F1 push vs post": 0.9291670099771987,
+        "FP in replicated classes %": 35.8
+      }
+    },
+    "ges_by_classes_rows": [
+      {
+        "classes": 2,
+        "rows": 250,
+        "F1 unconstrained": "0.730 \u00b1 0.048",
+        "F1 pushed-down": "0.730 \u00b1 0.048",
+        "seconds unconstrained": 0.06,
+        "seconds pushed-down": 0.06
+      },
+      {
+        "classes": 2,
+        "rows": 1000,
+        "F1 unconstrained": "0.850 \u00b1 0.055",
+        "F1 pushed-down": "0.850 \u00b1 0.055",
+        "seconds unconstrained": 0.06,
+        "seconds pushed-down": 0.06
+      },
+      {
+        "classes": 2,
+        "rows": 4000,
+        "F1 unconstrained": "0.872 \u00b1 0.070",
+        "F1 pushed-down": "0.872 \u00b1 0.070",
+        "seconds unconstrained": 0.07,
+        "seconds pushed-down": 0.08
+      },
+      {
+        "classes": 3,
+        "rows": 250,
+        "F1 unconstrained": "0.666 \u00b1 0.070",
+        "F1 pushed-down": "0.666 \u00b1 0.070",
+        "seconds unconstrained": 0.16,
+        "seconds pushed-down": 0.12
+      },
+      {
+        "classes": 3,
+        "rows": 1000,
+        "F1 unconstrained": "0.753 \u00b1 0.099",
+        "F1 pushed-down": "0.753 \u00b1 0.099",
+        "seconds unconstrained": 0.19,
+        "seconds pushed-down": 0.14
+      },
+      {
+        "classes": 3,
+        "rows": 4000,
+        "F1 unconstrained": "0.775 \u00b1 0.110",
+        "F1 pushed-down": "0.775 \u00b1 0.110",
+        "seconds unconstrained": 0.24,
+        "seconds pushed-down": 0.2
+      },
+      {
+        "classes": 5,
+        "rows": 250,
+        "F1 unconstrained": "0.569 \u00b1 0.079",
+        "F1 pushed-down": "0.579 \u00b1 0.092",
+        "seconds unconstrained": 0.64,
+        "seconds pushed-down": 0.29
+      },
+      {
+        "classes": 5,
+        "rows": 1000,
+        "F1 unconstrained": "0.635 \u00b1 0.065",
+        "F1 pushed-down": "0.666 \u00b1 0.057",
+        "seconds unconstrained": 0.81,
+        "seconds pushed-down": 0.34
+      },
+      {
+        "classes": 5,
+        "rows": 4000,
+        "F1 unconstrained": "0.653 \u00b1 0.083",
+        "F1 pushed-down": "0.687 \u00b1 0.069",
+        "seconds unconstrained": 0.98,
+        "seconds pushed-down": 0.4
+      },
+      {
+        "classes": 8,
+        "rows": 250,
+        "F1 unconstrained": "0.535 \u00b1 0.058",
+        "F1 pushed-down": "0.584 \u00b1 0.045",
+        "seconds unconstrained": 2.05,
+        "seconds pushed-down": 0.57
+      },
+      {
+        "classes": 8,
+        "rows": 1000,
+        "F1 unconstrained": "0.593 \u00b1 0.045",
+        "F1 pushed-down": "0.634 \u00b1 0.045",
+        "seconds unconstrained": 2.87,
+        "seconds pushed-down": 0.85
+      },
+      {
+        "classes": 8,
+        "rows": 4000,
+        "F1 unconstrained": "0.590 \u00b1 0.043",
+        "F1 pushed-down": "0.644 \u00b1 0.043",
+        "seconds unconstrained": 3.77,
+        "seconds pushed-down": 0.82
+      }
+    ]
+  },
+  "e3": {
+    "GES": {
+      "arm": "GES",
+      "directed F1": "0.671 \u00b1 0.037",
+      "precision": "0.618 \u00b1 0.045",
+      "recall": "0.736 \u00b1 0.032",
+      "SHD": "6.100 \u00b1 0.849",
+      "adjacency F1": "0.828 \u00b1 0.025",
+      "forbidden": 0,
+      "p F1 vs GES": null
+    },
+    "GES + entity": {
+      "arm": "GES + entity",
+      "directed F1": "0.716 \u00b1 0.029",
+      "precision": "0.779 \u00b1 0.038",
+      "recall": "0.664 \u00b1 0.027",
+      "SHD": "3.800 \u00b1 0.392",
+      "adjacency F1": "0.911 \u00b1 0.014",
+      "forbidden": 0,
+      "p F1 vs GES": 0.005859375
+    },
+    "GES-Prior (pre-rev.)": {
+      "arm": "GES-Prior (pre-rev.)",
+      "directed F1": "0.767 \u00b1 0.017",
+      "precision": "0.723 \u00b1 0.031",
+      "recall": "0.818 \u00b1 0.000",
+      "SHD": "4.500 \u00b1 0.527",
+      "adjacency F1": "0.852 \u00b1 0.019",
+      "forbidden": 0,
+      "p F1 vs GES": 0.001953125
+    },
+    "GES-M-B": {
+      "arm": "GES-M-B",
+      "directed F1": "0.761 \u00b1 0.019",
+      "precision": "0.712 \u00b1 0.034",
+      "recall": "0.818 \u00b1 0.000",
+      "SHD": "4.700 \u00b1 0.588",
+      "adjacency F1": "0.845 \u00b1 0.021",
+      "forbidden": 0,
+      "p F1 vs GES": 0.001953125
+    },
+    "GES-Prior (ext. start)": {
+      "arm": "GES-Prior (ext. start)",
+      "directed F1": "0.767 \u00b1 0.017",
+      "precision": "0.723 \u00b1 0.031",
+      "recall": "0.818 \u00b1 0.000",
+      "SHD": "4.500 \u00b1 0.527",
+      "adjacency F1": "0.852 \u00b1 0.019",
+      "forbidden": 0,
+      "p F1 vs GES": 0.001953125
+    },
+    "GES-Prior": {
+      "arm": "GES-Prior",
+      "directed F1": "0.767 \u00b1 0.017",
+      "precision": "0.723 \u00b1 0.031",
+      "recall": "0.818 \u00b1 0.000",
+      "SHD": "4.500 \u00b1 0.527",
+      "adjacency F1": "0.852 \u00b1 0.019",
+      "forbidden": 0,
+      "p F1 vs GES": 0.001953125
+    },
+    "GES-Prior + entity": {
+      "arm": "GES-Prior + entity",
+      "directed F1": "0.820 \u00b1 0.024",
+      "precision": "0.888 \u00b1 0.037",
+      "recall": "0.764 \u00b1 0.029",
+      "SHD": "2.800 \u00b1 0.392",
+      "adjacency F1": "0.907 \u00b1 0.016",
+      "forbidden": 0,
+      "p F1 vs GES": 0.001953125
+    },
+    "GES-Prior, no priors": {
+      "arm": "GES-Prior, no priors",
+      "directed F1": "0.662 \u00b1 0.020",
+      "precision": "0.610 \u00b1 0.034",
+      "recall": "0.727 \u00b1 0.000",
+      "SHD": "6.200 \u00b1 0.704",
+      "adjacency F1": "0.828 \u00b1 0.025",
+      "forbidden": 0,
+      "p F1 vs GES": 0.5
+    },
+    "p GES-Prior vs pre-revision": 1.0
+  },
+  "e4": {
+    "kgs": 11,
+    "kgs_fit_failed": 1,
+    "arms": {
+      "true graph": {
+        "graph": "true graph",
+        "TV, descendants": "0.040 \u00b1 0.012",
+        "TV, non-descendants": "0.062 \u00b1 0.022",
+        "edges": 11.9,
+        "fit s": 10.9,
+        "p vs unconstrained": 0.0009765625
+      },
+      "pushed-down": {
+        "graph": "pushed-down",
+        "TV, descendants": "0.080 \u00b1 0.014",
+        "TV, non-descendants": "0.080 \u00b1 0.025",
+        "edges": 17.5,
+        "fit s": 13.3,
+        "p vs unconstrained": 0.5625
+      },
+      "+ entity check": {
+        "graph": "+ entity check",
+        "TV, descendants": "0.079 \u00b1 0.014",
+        "TV, non-descendants": "0.077 \u00b1 0.025",
+        "edges": 12.7,
+        "fit s": 11.3,
+        "p vs unconstrained": 0.46484375
+      },
+      "unconstrained": {
+        "graph": "unconstrained",
+        "TV, descendants": "0.081 \u00b1 0.015",
+        "TV, non-descendants": "0.081 \u00b1 0.027",
+        "edges": 18.1,
+        "fit s": 12.6,
+        "p vs unconstrained": null
+      },
+      "empty graph": {
+        "graph": "empty graph",
+        "TV, descendants": "0.134 \u00b1 0.031",
+        "TV, non-descendants": "0.062 \u00b1 0.023",
+        "edges": 0.0,
+        "fit s": 7.7,
+        "p vs unconstrained": 0.0048828125
+      }
+    },
+    "kgs_with_undirected_edges": 9,
+    "orientation_sd_mean": 0.010380578284051164,
+    "orientation_range_max": 0.095875,
+    "undirected_edges_mean": 4.666666666666667
+  },
+  "e7": {
+    "kgs": 20,
+    "skip_edges_mean": 4.25,
+    "true_edges_mean": 21.55,
+    "arms": {
+      "unconstrained": {
+        "arm": "unconstrained",
+        "pruned %": 0.0,
+        "adjacency F1": "0.617 \u00b1 0.042",
+        "recall, admissible edges": "0.752 \u00b1 0.044",
+        "recall, skip edges": "0.752 \u00b1 0.085",
+        "precision": "0.538 \u00b1 0.051",
+        "p F1 vs unconstrained": null
+      },
+      "k = 1": {
+        "arm": "k = 1",
+        "pruned %": 58.4,
+        "adjacency F1": "0.572 \u00b1 0.037",
+        "recall, admissible edges": "0.806 \u00b1 0.040",
+        "recall, skip edges": "0.000 \u00b1 0.000",
+        "precision": "0.517 \u00b1 0.039",
+        "p F1 vs unconstrained": 0.0029021034488471635
+      },
+      "k = 2": {
+        "arm": "k = 2",
+        "pruned %": 26.8,
+        "adjacency F1": "0.622 \u00b1 0.040",
+        "recall, admissible edges": "0.752 \u00b1 0.044",
+        "recall, skip edges": "0.761 \u00b1 0.085",
+        "precision": "0.543 \u00b1 0.049",
+        "p F1 vs unconstrained": 0.06788915486182899
+      }
+    }
+  },
+  "e5": {
+    "stages": {
+      "synthetic_clinic": {
+        "schema_seconds": 0.19244695780798793,
+        "triples": 9854,
+        "n_classes": 3,
+        "constraint_seconds": 0.0001332499086856842,
+        "join_seconds": 3.6851537919137627,
+        "rows": 1240,
+        "columns": 11,
+        "pruning_rate": 0.16363636363636364
+      },
+      "SCLC_patients": {
+        "schema_seconds": 0.8311624170746654,
+        "triples": 47122,
+        "n_classes": 1,
+        "constraint_seconds": 4.075001925230026e-05,
+        "join_seconds": 0.4122547919396311,
+        "rows": 4279,
+        "columns": 10,
+        "pruning_rate": 0.0
+      }
+    },
+    "clinic": {
+      "discovery_seconds": 0.18616916611790657,
+      "fit_seconds": 17.996407834114507,
+      "n_model_nodes": 11,
+      "training_rows": 1240,
+      "observational_seconds": 0.02225499995984137,
+      "observational_backend": "mechanism",
+      "n_targets": 10,
+      "interventional_seconds": 0.31453541619703174,
+      "counterfactual_seconds": 0.17320545809343457,
+      "counterfactual_draws": 1000,
+      "export_seconds": 14.702453542035073,
+      "exported_triples": 535,
+      "n_answers": 30,
+      "roundtrip_adjacency_identical": true,
+      "shacl_seconds": 1.8158688750118017,
+      "shacl_conforms": true,
+      "n_shapes": 23,
+      "merged_triples": 10389,
+      "source_triples": 9854,
+      "path_query_seconds": 0.002390083158388734,
+      "path_query_pairs": 29,
+      "path_query_matches_closure": true,
+      "listing_query_seconds": 0.00596954207867384,
+      "listing_query_rows": 10,
+      "vocab_classes": 16,
+      "vocab_properties": 37
+    }
+  }
+}

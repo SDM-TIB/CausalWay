@@ -1,0 +1,19 @@
+{
+  "endpoint": "https://semscout.istc.cnr.it/sparql",
+  "date": "2026-11-17",
+  "schema_seconds": 0.4704915410839021,
+  "n_classes": 97,
+  "n_object_properties": 37,
+  "n_object_domain_range": 37,
+  "n_data_properties": 5,
+  "n_data_domain_range": 5,
+  "n_inferred": 0,
+  "n_property_nodes": 42,
+  "n_data_nodes": 5,
+  "constraint_seconds_k1": 0.015890916110947728,
+  "pruning_rate_k1": 0.8745644599303136,
+  "n_allowed_k1": 216,
+  "constraint_seconds_k2": 0.017692958004772663,
+  "pruning_rate_k2": 0.8048780487804879,
+  "n_allowed_k2": 336
+}

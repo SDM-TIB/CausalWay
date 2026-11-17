@@ -23,7 +23,7 @@ from .utils import apply_score
 
 
 
-def fes(C, criterion, allowed=None):
+def fes(C, criterion, allowed=None, legacy=False):
     """
     Forward Equivalence Search
 
@@ -36,6 +36,8 @@ def fes(C, criterion, allowed=None):
     allowed: np.ndarray, optional
         (d, d) boolean matrix; ``allowed[i, j]`` means ``i -> j`` is a valid
         direction.  Only edges whose skeleton is allowed are inserted.
+    legacy: bool
+        if True, use gCastle's original (wrong) `dag_to_cpdag`
 
     Returns
     -------
@@ -49,7 +51,7 @@ def fes(C, criterion, allowed=None):
             break
         x, y = edge
         C = insert(x, y, t, C)
-        C = pdag_to_cpdag(C)
+        C = pdag_to_cpdag(C, legacy=legacy)
 
     return C
 
@@ -116,7 +118,7 @@ def forward_search(C, criterion, allowed=None):
     return edge, subset
 
 
-def bes(C, criterion, allowed=None):
+def bes(C, criterion, allowed=None, legacy=False):
     """
     Backward Equivalence Search
 
@@ -136,17 +138,17 @@ def bes(C, criterion, allowed=None):
     """
 
     while True:
-        edge, h = backward_search(C, criterion, allowed)
+        edge, h = backward_search(C, criterion, allowed, legacy=legacy)
         if edge is None:
             break
         x, y = edge
-        C = delete(x, y, h, C)
-        C = pdag_to_cpdag(C)
+        C = delete(x, y, h, C, legacy=legacy)
+        C = pdag_to_cpdag(C, legacy=legacy)
 
     return C
 
 
-def backward_search(C, criterion, allowed=None):
+def backward_search(C, criterion, allowed=None, legacy=False):
     """
     backward search
 
@@ -161,6 +163,11 @@ def backward_search(C, criterion, allowed=None):
         scoring, one of ['bic', 'bdeu'].
     allowed: np.ndarray, optional
         accepted for signature symmetry (deletion never violates a constraint).
+    legacy: bool
+        if True, use gCastle's original search, which (1) draws H from the
+        neighbors of Y that are NOT adjacent to X and (2) leaves X in both
+        parent sets of the score difference, so `det` is always 0 and no edge
+        is ever deleted.
 
     Returns
     -------
@@ -168,6 +175,9 @@ def backward_search(C, criterion, allowed=None):
         ((X, Y), H), the edge (X, Y) denotes X->Y is valid and H is a subset of
         the neighbors of Y that are adjacent to X,
     """
+
+    if not legacy:
+        return _backward_search(C, criterion)
 
     d = C.shape[0] # .d
     edge = None
@@ -188,6 +198,43 @@ def backward_search(C, criterion, allowed=None):
                 pa2 = pa_y | (na_yx - H)
                 det = (apply_score(criterion, y, pa1)
                        - apply_score(criterion, y, pa2))
+                if det > best:
+                    best = det
+                    edge = (x, y)
+                    subset = H
+
+    return edge, subset
+
+
+def _backward_search(C, criterion):
+    """
+    backward search following Chickering (2002), Theorem 17.
+
+    For every edge X -> Y or X - Y and every H subset of NA_{Y,X} (neighbors of
+    Y adjacent to X) such that NA_{Y,X} \\ H is a clique,
+        det = f(Y, Pa(Y) U (NA_{Y,X} \\ H) \\ {X}) - f(Y, Pa(Y) U (NA_{Y,X} \\ H) U {X}).
+
+    gCastle's version (kept as ``legacy=True``) writes both parent sets without
+    X when X - Y is undirected and with X when X -> Y is directed, so the two
+    scores are the same number and the backward phase is a no-op. With it, what
+    the project called GES was forward search alone: every edge the forward
+    phase added to explain away a dependence stayed in the graph.
+    """
+
+    d = C.shape[0]
+    edge = None
+    subset = set()
+    best = 0
+    for x in range(d):
+        for y in np.flatnonzero(C[x, :]):           # X -> Y or X - Y
+            y = int(y)
+            na_yx = neighbors(y, C) & adjacent(x, C)
+            for H in subset_generator(na_yx):
+                if not delete_validity(x, y, H, C):
+                    continue
+                pa = parent(y, C) | (na_yx - H)
+                det = (apply_score(criterion, y, pa - {x})
+                       - apply_score(criterion, y, pa | {x}))
                 if det > best:
                     best = det
                     edge = (x, y)

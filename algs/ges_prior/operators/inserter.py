@@ -83,13 +83,19 @@ def insert_validity(x, y, T, C) -> bool:
     # condition1
     condition1 = is_clique(na_yx_t, C)
 
-    # condition2
-    semi_paths = semi_directed_path(y, x, C)
-    condition2 = True
-    for path in semi_paths:
-        if len(set(path) & na_yx_t) == 0:
-            condition2 = False
-            break
+    if not condition1:
+        return False
+
+    # condition2: every semi-directed path from y to x passes through NAyx U T,
+    # i.e. x is unreachable from y once those nodes are removed.
+    #
+    # gCastle enumerates all semi-directed paths and inspects each one. Their
+    # number is exponential in the density of the graph: an unconstrained run on
+    # a 23-node KG (8 classes, 4,000 rows) spent more than ten minutes in this
+    # line where its neighbours took under 30 s. The condition is a reachability
+    # question and a breadth-first search answers it in O(V + E) with the same
+    # truth value (tests/test_ges_prior.py compares the two on random CPDAGs).
+    condition2 = not semi_directed_reachable(y, x, C, blocked=na_yx_t)
     if condition1 and condition2:
         return True
     else:

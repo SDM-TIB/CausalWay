@@ -13,7 +13,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
+from itertools import combinations
+
 import numpy as np
+
+# ---------------------------------------------------------------------------
+# What changed against gCastle's GES, and why (WWW'27 resource revision)
+#
+# This file started as a copy of gCastle's ``ges/functional/graph.py``. Two of
+# its routines are wrong, and both are on the path every GES step takes:
+#
+# * ``dag_to_cpdag`` labels edges compelled / reversible with Chickering's
+#   algorithm, but tests ``lowest_edge in np.argwhere(...)``, which is an
+#   element-wise membership test rather than a row-wise one. For some DAGs
+#   (e.g. 0->1, 0->2, 0->3, 2->3) it keeps a reversible edge directed, so the
+#   search walks over graphs that are not CPDAGs. The default below builds the
+#   CPDAG the textbook way instead: keep the v-structures, close under Meek's
+#   rules R1-R3.
+# * the backward phase (``ges_search.backward_search``) never deleted an edge.
+#
+# ``legacy=True`` keeps the original behaviour on every affected function. It
+# exists for one purpose: ``experiments/e1_ges_correctness.py`` measures what
+# the fix is worth, and that needs both arms. Nothing else should pass it.
+# ---------------------------------------------------------------------------
+
 
 def _apply_meek_rules(cpdag: np.ndarray, allowed: np.ndarray = None) -> np.ndarray:
     """
@@ -240,6 +264,33 @@ def semi_directed_path(x, y, G) -> list:
     return semi_paths
 
 
+def semi_directed_reachable(x, y, G, blocked=()) -> bool:
+    """
+    Is there a semi-directed path from x to y in G that avoids ``blocked``?
+
+    A semi-directed path follows undirected edges either way and directed edges
+    forwards. ``blocked`` nodes may not appear on the path (x and y themselves
+    are never treated as blocked). Breadth-first, O(V + E).
+    """
+    G = np.asarray(G)
+    blocked = set(blocked) - {x, y}
+    seen = {x}
+    frontier = [x]
+    while frontier:
+        nxt = []
+        for u in frontier:
+            for v in np.flatnonzero(G[u, :] != 0):      # u -> v or u - v
+                v = int(v)
+                if v == y:
+                    return True
+                if v in seen or v in blocked:
+                    continue
+                seen.add(v)
+                nxt.append(v)
+        frontier = nxt
+    return False
+
+
 def is_clique(sub_nodes, C) -> bool:
     """
     check whether the graph corresponding to the sub-nodes is a complete
@@ -282,7 +333,7 @@ def is_dag(G) -> bool:
     return True
 
 
-def pdag_to_cpdag(P) -> np.ndarray:
+def pdag_to_cpdag(P, legacy=False) -> np.ndarray:
     """
     transform PDAG to CPDAG
 
@@ -290,6 +341,8 @@ def pdag_to_cpdag(P) -> np.ndarray:
     ----------
     P: np.array
         PDAG
+    legacy: bool
+        if True, use gCastle's original (wrong) `dag_to_cpdag`
 
     Returns
     -------
@@ -298,7 +351,7 @@ def pdag_to_cpdag(P) -> np.ndarray:
     """
 
     G = pdag_to_dag(P)
-    C = dag_to_cpdag(G)
+    C = dag_to_cpdag(G, legacy=legacy)
 
     return C
 
@@ -351,21 +404,41 @@ def pdag_to_dag(P) -> np.ndarray:
     return G
 
 
-def dag_to_cpdag(G) -> np.ndarray:
+def dag_to_cpdag(G, legacy=False) -> np.ndarray:
     """
     Return the completed partially directed acyclic graph (CPDAG) that
     represents the Markov equivalence class of a given DAG.
+
+    The default keeps the edges of the v-structures directed and closes the
+    graph under Meek's rules R1-R3 (Meek, 1995).
 
     Parameters
     ----------
     G: np.array
         DAG
+    legacy: bool
+        if True, use gCastle's original `label_edges`-based routine. Its test
+        `lowest_edge in np.argwhere(...)` is element-wise rather than row-wise,
+        so it returns a wrong CPDAG for some DAGs (e.g. 0->1, 0->2, 0->3, 2->3,
+        where it keeps 0->3 directed).
 
     Returns
     -------
     out: np.array
         CPDAG
     """
+
+    if not legacy:
+        G = (np.asarray(G) != 0).astype(int)
+        adj = (G + G.T) > 0
+        cpdag = adj.astype(int)
+        for c in range(G.shape[0]):
+            pa = np.flatnonzero(G[:, c])
+            for a, b in combinations(pa, 2):
+                if not adj[a, b]:       # v-structure a -> c <- b
+                    cpdag[c, a] = 0
+                    cpdag[c, b] = 0
+        return meek_closure(cpdag, apply_r4=False)
 
     labeled_g = label_edges(G)
     cpdag = np.zeros_like(labeled_g)
@@ -508,3 +581,248 @@ def only_directed_graph(P) -> np.ndarray:
 
     return G
 
+
+def _has_directed_path(G: np.ndarray, src: int, dst: int) -> bool:
+    """Return True if there is a directed path src -> ... -> dst in G.
+
+    Only strictly directed edges count (``G[u, v] != 0 and G[v, u] == 0``), so
+    the function is safe to call on a PDAG.
+    """
+    stack = [src]
+    visited = {src}
+    while stack:
+        u = stack.pop()
+        if u == dst:
+            return True
+        for v in np.flatnonzero((G[u] != 0) & (G[:, u] == 0)):
+            v = int(v)
+            if v not in visited:
+                visited.add(v)
+                stack.append(v)
+    return False
+
+
+def _to_dag(cpdag: np.ndarray) -> np.ndarray:
+    """
+    Return one DAG in the equivalence class represented by a PDAG/CPDAG.
+
+    A numpy port of ``pgmpy.base.PDAG.to_dag`` (Dor & Tarsi, 1992):
+    repeatedly pick a node X with (1) no directed children and (2) every
+    undirected neighbour of X adjacent to all other neighbours of X; orient
+    all undirected edges into X and remove X. If no such node exists the PDAG
+    has no consistent extension, and the remaining undirected edges are
+    oriented arbitrarily (skipping those that would create a cycle), as pgmpy does.
+
+    Parameters
+    ----------
+    cpdag : np.ndarray
+        PDAG adjacency matrix; cpdag[i, j] = 1 and cpdag[j, i] = 0 denotes i -> j,
+        cpdag[i, j] = cpdag[j, i] = 1 denotes i - j.
+
+    Returns
+    -------
+    np.ndarray
+        DAG adjacency matrix
+    """
+    P = (np.asarray(cpdag) != 0).astype(int)
+    n = P.shape[0]
+    undirected = (P == 1) & (P.T == 1)
+    dag = np.where(undirected, 0, P)          # keep directed edges only
+
+    remaining = list(range(n))
+    while remaining:
+        found = False
+        for x in remaining:
+            sub = [v for v in remaining if v != x]
+            und_nbrs = [y for y in sub if undirected[x, y]]
+            children = [y for y in sub if P[x, y] and not P[y, x]]
+            if children:
+                continue
+            all_nbrs = [z for z in sub if P[x, z] or P[z, x]]
+            nbrs_adjacent = all(
+                P[y, z] or P[z, y]
+                for z in all_nbrs for y in und_nbrs if y != z
+            )
+            if not und_nbrs or nbrs_adjacent:
+                found = True
+                for y in und_nbrs:
+                    dag[y, x] = 1
+                remaining.remove(x)
+                break
+
+        if not found:
+            warnings.warn(
+                "PDAG has no faithful extension (= no oriented DAG with the "
+                "same v-structures as PDAG). Remaining undirected PDAG edges "
+                "oriented arbitrarily."
+            )
+            for i in remaining:
+                for j in remaining:
+                    if P[i, j] and not dag[j, i] and not dag[i, j]:
+                        if not _has_directed_path(dag, j, i):
+                            dag[i, j] = 1
+            break
+
+    return dag
+
+
+def meek_closure(P: np.ndarray, apply_r4: bool = True, allowed: np.ndarray = None) -> np.ndarray:
+    """
+    Orient the undirected edges of a PDAG with Meek's rules until no rule applies.
+
+    R1: c -> a - b, c and b not adjacent                        => a -> b
+    R2: a -> c -> b and a - b                                   => a -> b
+    R3: a - c -> b, a - d -> b, c and d not adjacent, a - b     => a -> b
+    R4: a - d, d -> c -> b, a adjacent to c, b and d not adjacent, a - b => a -> b
+
+    Parameters
+    ----------
+    P : np.ndarray
+        PDAG adjacency matrix; P[i, j] = 1 and P[j, i] = 0 denotes i -> j,
+        P[i, j] = P[j, i] = 1 denotes i - j.
+    apply_r4 : bool
+        R4 is only needed when the PDAG holds orientations beyond its v-structures.
+    allowed : np.ndarray, optional
+        (d, d) boolean matrix. A rule never orients ``a -> b`` when
+        ``allowed[a, b]`` is False; that edge is left undirected for the caller,
+        which knows what the constraint wants (see ``orient_by_B``).
+
+    Returns
+    -------
+    np.ndarray
+        The maximally oriented PDAG
+    """
+    P = (np.asarray(P) != 0).astype(int)
+    d = P.shape[0]
+    changed = True
+    while changed:
+        changed = False
+        for a in range(d):
+            for b in range(d):
+                und = (P == 1) & (P.T == 1)
+                if not und[a, b]:
+                    continue
+                if allowed is not None and not allowed[a, b]:
+                    continue
+                dirc = (P == 1) & (P.T == 0)
+                adj = (P + P.T) > 0
+                r1 = np.any(dirc[:, a] & ~adj[:, b] & (np.arange(d) != b))
+                r2 = np.any(dirc[a, :] & dirc[:, b])
+                zs = np.flatnonzero(und[a, :] & dirc[:, b])
+                r3 = any(not adj[z1, z2] for z1, z2 in combinations(zs, 2))
+                r4 = apply_r4 and any(
+                    und[a, dd] and not adj[b, dd] and dd != b
+                    for c in np.flatnonzero(dirc[:, b] & adj[a, :])
+                    for dd in np.flatnonzero(dirc[:, c])
+                )
+                if r1 or r2 or r3 or r4:
+                    P[b, a] = 0
+                    changed = True
+    return P
+
+
+def enforce_directions(P: np.ndarray, allowed: np.ndarray) -> np.ndarray:
+    """
+    Make the *directed* edges of a PDAG respect a directional constraint.
+
+    Forward search only checks the skeleton (an equivalence class has no edge
+    directions to check), so a compelled edge can point the forbidden way. Such
+    an edge is reversed when the reverse is permitted and closes no directed
+    cycle, and removed otherwise. Undirected edges are left alone.
+    """
+    P = (np.asarray(P) != 0).astype(int)
+    d = P.shape[0]
+    for i in range(d):
+        for j in range(d):
+            if P[i, j] and not P[j, i] and not allowed[i, j]:
+                P[i, j] = 0
+                if allowed[j, i] and not _has_directed_path(P, i, j):
+                    P[j, i] = 1
+    return P
+
+
+def orient_by_B(cpdag: np.ndarray, B: np.ndarray, allowed: np.ndarray = None) -> np.ndarray:
+    """
+    Orient the undirected edges of a CPDAG with an asymmetric prior B.
+
+    Without a constraint the result stays inside the Markov equivalence class:
+    repeatedly take the undirected edge i - j with the largest
+    |B[i, j] - B[j, i]| (ties: lowest (i, j)), orient it towards the larger of
+    B[i, j] and B[j, i] (i -> j on a tie), and propagate with Meek's rules
+    R1-R4. After the propagation every remaining undirected edge can still be
+    oriented either way (Meek, 1995), so no cycle or new v-structure is ever
+    created. This replaces the earlier per-edge orientation, which looked at
+    each edge in isolation and could close a directed cycle on any undirected
+    triangle.
+
+    With a constraint (``allowed``), the constraint outranks both the prior and
+    the equivalence class: an edge with one permitted direction is oriented
+    first and that way, Meek's rules only fire into permitted directions, and
+    an orientation that would close a cycle is reversed if the reverse is
+    permitted and dropped otherwise. The result is then a DAG inside the
+    constraint, but not necessarily inside the class — Assumption 1 is
+    knowledge the class does not have.
+
+    Parameters
+    ----------
+    cpdag : np.ndarray
+        CPDAG adjacency matrix
+    B : np.ndarray
+        B[i, j] = prior probability of i -> j; NaN is treated as no preference
+    allowed : np.ndarray, optional
+        (d, d) boolean matrix; ``allowed[i, j]`` means ``i -> j`` is permitted
+
+    Returns
+    -------
+    np.ndarray
+        DAG adjacency matrix
+    """
+    P = (np.asarray(cpdag) != 0).astype(int)
+    B = np.nan_to_num(np.asarray(B, dtype=float), nan=0.5)
+
+    if allowed is None:
+        while True:
+            und = np.argwhere(np.triu((P == 1) & (P.T == 1), 1))
+            if len(und) == 0:
+                break
+            k = int(np.argmax([abs(B[i, j] - B[j, i]) for i, j in und]))
+            i, j = und[k]
+            u, v = (j, i) if B[j, i] > B[i, j] else (i, j)
+            P[v, u] = 0
+            P = meek_closure(P)
+        if not (is_dag(P) and np.array_equal(dag_to_cpdag(P), dag_to_cpdag(_to_dag(cpdag)))):
+            raise AssertionError("Bug: B orientation left the equivalence class of the CPDAG.")
+        return P
+
+    allowed = np.asarray(allowed, dtype=bool)
+    P = enforce_directions(P, allowed)
+    while True:
+        und = [(int(i), int(j)) for i, j in np.argwhere(np.triu((P == 1) & (P.T == 1), 1))]
+        if not und:
+            break
+
+        def priority(e):
+            i, j = e
+            forced = allowed[i, j] != allowed[j, i]
+            return (forced, abs(B[i, j] - B[j, i]))
+
+        i, j = max(und, key=priority)       # max() keeps the first of equals: lowest (i, j)
+        if allowed[i, j] and not allowed[j, i]:
+            order = [(i, j)]
+        elif allowed[j, i] and not allowed[i, j]:
+            order = [(j, i)]
+        elif not allowed[i, j] and not allowed[j, i]:
+            order = []
+        else:
+            order = [(j, i), (i, j)] if B[j, i] > B[i, j] else [(i, j), (j, i)]
+
+        P[i, j] = P[j, i] = 0
+        for u, v in order:
+            if not _has_directed_path(P, v, u):
+                P[u, v] = 1
+                break
+        P = meek_closure(P, allowed=allowed)
+
+    if not is_dag(P):
+        raise AssertionError("Bug: constrained B orientation produced a cycle.")
+    return P

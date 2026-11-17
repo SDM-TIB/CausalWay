@@ -13,6 +13,8 @@ interventional and entity-level counterfactual questions. Everything it learns e
 | `causalway` + `algs` + `runners` | Python package: KG → schema → flat join → discovery → SCM/CBN → queries → RDF |
 | **CausalWay Studio** | Four-module web app over the same engine — one FastAPI process, one port |
 | CLI runners | `run_kg_discovery.py` (discovery), `run_causal_model.py` (fit / query) |
+| `examples/quickstart.py` | The whole path in one file, ~1 minute, offline |
+| `experiments/` | **KGBench** (KGs with a known causal graph) and the evaluation, one command |
 
 ---
 
@@ -111,8 +113,8 @@ and proxies `/api` to :8123.
 1. **Preprocess** — load a source, induce the schema, pick property nodes, set the constraint
    (*k* hops, relation direction, ε), preview the SPARQL, materialise the flat join.
 2. **Discovery** — run methods, accumulate an edge ledger across runs, curate the graph by hand.
-3. **Inference** — fit an SCM/CBN, evaluate it, then condition, intervene, and contrast arms.
-   Any answer, or the whole log, exports as `cw:` Turtle.
+3. **Inference** — fit an SCM/CBN, evaluate it, then condition and intervene.
+   Any answer, or the whole log, exports as `cw:` Turtle, with the model and graph behind it.
 4. **Counterfactual** — abduct a named entity (or a hand-described unit), act, compare factual
    against counterfactual.
 
@@ -129,28 +131,36 @@ unit without its source KG.
 
 ## Python package
 
-```python
-from causalway import OntologySchema, candidate_nodes, EdgeConstraint, materialize
+The whole path in one runnable file — about a minute on the bundled clinic KG, offline:
 
-schema = OntologySchema.from_file("kgs/ttls/synthetic_clinic.ttl", infer_missing=True)
-nodes = candidate_nodes(schema)
-constraint = EdgeConstraint.from_schema(schema, nodes, max_hops=2)   # Assumption 1, k = 2
-mat = materialize(schema, nodes, source="kgs/ttls/synthetic_clinic.ttl")
+```bash
+python examples/quickstart.py
 ```
 
 ```python
-from runners.run_kg_discovery import run_algorithm, to_ocg
+from runners.run_kg_discovery import build_context, run_algorithm, to_ocg
 
-adj = run_algorithm("GES", mat.frame, constraint=constraint)
-ocg = to_ocg(adj, constraint, method="GES")
-ocg.to_rdf().serialize("results/ges.ttl", format="turtle")
+KG = "kgs/ttls/synthetic_clinic.ttl"
+ctx = build_context(KG)                               # schema, property nodes, Assumption 1, flat join
+adj = run_algorithm("GES", ctx, constrained=True)     # the constraint is inside the search
+ocg = to_ocg(adj, ctx, constrained=True, method="GES")  # one DAG, with relational-path labels
 ```
 
 ```python
 from causalway.model import CausalModel
 
-model = CausalModel(ocg).fit(source="kgs/ttls/synthetic_clinic.ttl")
-model.intervene({"Patient.smoking": "No"}, target="Patient.survival")
+model = CausalModel.fit(ocg, KG, include_object_properties=False, random_state=0)
+model.condition("Patient.survival", {"Patient.smoking": "Yes"})                 # observe
+model.intervene({"Hospital.careQuality": "High"}, target="Patient.survival")    # intervene
+patient = sorted(set(model.spec.mat.entity_ids["Patient"]))[0]
+model.counterfactual({(None, "Patient.smoking"): "No"}, entity=patient,        # counterfactual
+                     target="Patient.tumorStage")
+```
+
+```python
+g = model.spec.ocg.to_rdf()           # the causal graph as cw: RDF ...
+model.to_rdf(graph=g)                 # ... plus the fitted model; see examples/quickstart.py
+g.serialize("causal_layer.ttl")       # for queries, answers and SHACL validation
 ```
 
 Plan 2 modules (`model`, `mechanisms`, `entities`, `inference`, `queries`, `evaluation`) depend on
@@ -179,33 +189,106 @@ CLI: `python -m runners.run_kg_discovery --help`, `python -m runners.run_causal_
 
 ## RDF output and the `cw:` vocabulary
 
-Discovered graphs, fitted models, queries with their observational conditions, answers, and
-counterfactual worlds all round-trip to RDF under `cw:` (`http://sdm-causalway.org/`). Four rules:
+Discovered graphs, fitted models, and conditional / interventional / counterfactual queries with
+their answers all round-trip to RDF under `cw:` (`http://sdm-causalway.org/`). The model in one
+screen:
 
-1. **`causalway/vocab.py` is the single source of truth** for every term and IRI stem. No IRI is
-   hard-coded elsewhere. `python -m causalway.vocab` regenerates `causalway/ontology.ttl`; the
-   service serves the same at `GET /api/vocab`.
-2. **Every exported triple is produced by an RML mapping**, never by `g.add(...)`. Four mappings,
-   one per artifact: `ocg_mapping`, `model_mapping`, `query_mapping`, `cf_mapping`. To change an
-   export's shape, edit the mapping — their headers document SDM-RDFizer's quirks. (The one
-   exception is the opt-in named-graph projection, which asserts entity-level *quads* and so cannot
-   travel through a mapping whose contract is that it never does.)
-3. **IRIs are minted deterministically**, so the same model/query/intervention is the same resource
-   across runs and queries round-trip.
-4. **The vocabulary is subtractive.** Nothing is minted that other triples already entail, or that
-   standard syntax already expresses.
+```
+cw:OntologicalCausalGraph   cw:discoveredBy cw:CausalDiscoveryRun
+cw:CausalDiscoveryRun       cw:sourceKG, cw:byMethod, cw:discoveredTime, cw:hasParameter cw:Parameter
+cw:Parameter                cw:parameterName, cw:parameterValue (typed), rdfs:comment
+cw:CausalNode               rdfs:label, cw:inGraph, cw:domain, cw:property, cw:range      -- (D_p, p, R_p)
+cw:CausalEdge               rdfs:label, cw:inGraph, cw:cause, cw:effect, cw:curated,
+                            cw:weight?, cw:viaRelationalPath*  ("^<treatedAt>/<receives>")
 
-The vocabulary keeps *seeing* and *doing* apart at the link: `cw:hasEvidence` is a conditional
-query's observed evidence; `cw:hasCondition` is the sub-population an interventional estimate is
-restricted to (a CATE). Both point at a `cw:Condition`.
+cw:CausalModel              cw:onGraph, cw:fittedBy cw:ModelFittingRun, cw:artifactChecksum,
+                            cw:hasMechanism cw:CausalMechanism (cw:onNode, cw:mechanismType, cw:invertible)
+
+cw:{Conditional|Interventional|Counterfactual}Query
+                            cw:onGraph, cw:hasIntervention (X), cw:hasCondition (Z), cw:aboutEntity (e)
+cw:Intervention / cw:Condition   cw:onNode, cw:onProperty, cw:setValue / cw:observedValue
+cw:{Conditional|Interventional|Counterfactual}Answer        -- one per target node
+                            cw:forQuery, cw:evaluatedBy (a model), cw:evaluatedTime, cw:onNode,
+                            cw:onProperty, cw:predictedValue, cw:probability | cw:std, cw:factualValue
+```
+
+A **query is posed on a graph; an answer is evaluated by a model** — so one query can carry the
+answers of several models, and every answer traces to the model (and through it, the fitting run,
+the source KG and the artifact checksum) that produced it. The target set V is not stored: it is
+the nodes the answers are about. An average causal effect is two interventional queries.
+
+Five rules:
+
+1. **`causalway/vocab.py` is the single source of truth** for every term and IRI stem.
+   `python -m causalway.vocab` regenerates `causalway/ontology.ttl`; the service serves the same
+   at `GET /api/vocab`.
+2. **Every exported triple is produced by an RML mapping**, never by `g.add(...)`. Three mappings,
+   one per artifact: `ocg_mapping`, `model_mapping`, `query_mapping` (a counterfactual *world* is a
+   counterfactual query and its answers). To change an export's shape, edit the mapping — their
+   headers document SDM-RDFizer's quirks.
+3. **`causalway/shapes.ttl` states the constraints**, as SHACL: the graph is a DAG (a PC/GES CPDAG is
+   oriented into one DAG of its Markov equivalence class before export — no new v-structure, the
+   choice recorded — and the exporter refuses a cyclic graph), answer and query
+   types match, V, X and Z are disjoint (a counterfactual may condition on what it intervenes on —
+   that is what makes it one), Assumption 1 holds where the run enforced it.
+   `tests/test_shapes.py` runs it against real exports and against data broken on purpose.
+4. **IRIs are minted deterministically**, so the same question on the same graph is one resource.
+5. **The vocabulary is subtractive.** Nothing is minted that other triples already entail (a node's
+   kind is read off its range; an intra-class edge is one with no relational path), and no foreign
+   vocabulary is aligned to for the sake of a citation.
 
 `(D_p, p, R_p)` is deliberately **not** expressed with `rdfs:domain`/`rdfs:range`: their entailments
 would type every node as `rdf:Property`, and multiple domains are a *conjunctive* global constraint
-— the opposite of the per-node local scoping meant here.
+— the opposite of the per-node local scoping meant here. Causal nodes belong to one graph; compare
+two graphs by joining on `(cw:domain, cw:property, cw:range)`.
 
-The **counterfactual world** export is the only artifact describing named entities from the source
-KG, and therefore the only one that can be merged back into it. Everything else loads *alongside*
-the source graph.
+The **counterfactual** export is the only artifact that names entities of the source KG
+(`cw:aboutEntity`), and it never asserts `entity property value`, so it merges back into the source
+KG without contradicting it.
+
+---
+
+## Reproducing the evaluation
+
+```bash
+bash experiments/run_all.sh
+```
+
+About 25 minutes on 8 cores (`--quick` for a 3-minute smoke test; `PY=/path/to/python` to choose
+the interpreter). Every run appends one JSON line to `experiments/out/*.jsonl`, so an interrupted run
+resumes; `experiments/out/REPORT.md` and `summary.json` hold the aggregated tables. The outputs of
+the run reported in the paper are committed in `experiments/out/`.
+
+| Script | Question | Data |
+|---|---|---|
+| `e1_ges_correctness.py` | Is the project's GES a correct GES? (vs. the inherited search, vs. pgmpy) | Asia, Sachs, Child, Insurance |
+| `e2_constraint.py` | What does Assumption 1 buy as the schema grows — unconstrained vs. post-hoc filter vs. in the search; what does the entity-level check buy? | 120 KGBench KGs |
+| `e3_ges_prior.py` | Does GES-Prior use a prior well? | clinic KG × 10 seeds, cached LLM priors |
+| `e4_interventional.py` | Are interventional answers right? Scored against the generator's truth | 12 KGBench KGs |
+| `e5_efficiency.py` | What does each stage cost; does the knowledge layer answer a path query? | bundled KGs |
+| `e6_endpoint.py` | Schema induction on a live public endpoint (needs network; not in `run_all.sh`) | WHOW |
+
+**KGBench** (`experiments/kgbench.py`) generates snowflake-schema KGs — one fact class, a random
+tree of dimension classes — with a ground-truth causal graph that satisfies Assumption 1 and
+additive-logit categorical mechanisms. It writes plain RDF and can sample the *intervened*
+mechanism, which is what makes an interventional answer checkable:
+
+```python
+from experiments.kgbench import make_mechanism
+
+mech = make_mechanism(n_classes=5, n_attrs=3, seed=0)
+mech.sample(1000, seed=0).write_ttl("bench.ttl")              # the KG
+truth = mech.sample(200_000, seed=1, do={(1, 0): 0}).flat()   # P(. | do(C1.a1_0 = L0))
+```
+
+### The learner (`algs/ges_prior`)
+
+GES and GES-Prior are this repository's own. The search began as a copy of gCastle's; two inherited
+defects are fixed (the backward phase never deleted an edge; the DAG→CPDAG conversion kept some
+reversible edges directed) and the forward phase's validity test is now a reachability check
+instead of an enumeration of paths. `discover_structure(..., entity_ids=, owner_of=)` adds the
+**entity-level check**: an edge is kept only if the entities that own its effect support it, not
+merely the rows the join repeats. `tests/test_ges_prior.py` pins each of these.
 
 ---
 
@@ -215,9 +298,10 @@ the source graph.
 python -m pytest tests -q
 ```
 
-166 passing. Covers `causalway/`, plus `service/api/bundle.py`, an export→import→export round trip
-through real FastAPI routes, counterfactual batching, and the query RML export. **The frontend has
-no tests.**
+238 passing. Covers `causalway/`, the learner in `algs/ges_prior`, plus `service/api/bundle.py`, an
+export→import→export round trip through real FastAPI routes, counterfactual batching, the RML
+exports, and the SHACL shapes — run against every export and against data broken on purpose
+(`tests/test_shapes.py`). **The frontend has no tests.**
 
 ---
 
@@ -226,7 +310,20 @@ no tests.**
 Documented on purpose — the module docstrings say so too; please don't delete those comments to
 make the source look tidy.
 
-- **Row duplication breaks i.i.d.** `evaluation.row_weights` is an approximation, not a fix.
+- **Row duplication breaks i.i.d.** A 1:N join repeats an entity's attributes, and a score computed
+  on the join counts the copies as samples. The entity-level check (`algs/ges_prior/entity_check.py`)
+  removes the false edges this creates where an edge's family has one row per owning entity; it does
+  not cover a cause on the N side of a relation, and `evaluation.row_weights` remains an
+  approximation for model fitting. The check is a library option, not yet a Studio control.
+- **The runner's default join role can be a cross product.** `runners.build_context` treats each
+  object property as a join *and* a variable; on a class with two N:1 relations to large classes the
+  query degenerates. Studio's default (relationship only) does not; `experiments/common.py`
+  (`context_from_ttl`) shows the equivalent library call.
+- **`CausalModel.fit` can fail on a rare categorical level.** dowhy's automatic mechanism selection
+  cross-validates each node and raises when a level is absent from a fold.
+- **A counterfactual answer from the Python API carries no factual value.** Studio's export does
+  (`cw:factualValue`); to get the same from the library, export through
+  `causalway.cf_export.CounterfactualWorld` as `experiments/e5_efficiency.py` does.
 - **Categorical counterfactuals are not point-identified.** Gumbel-max coupling is one admissible
   choice among many.
 - **`condition` tier 1b is unimplemented** — the ladder skips pgmpy-exact to likelihood-weighting.

@@ -16,7 +16,7 @@
 from .graph import *
 
 
-def delete(x, y, H, C):
+def delete(x, y, H, C, legacy=False):
     """
     delete the edge between x and y, and for each h in H:
     (1) delete the previously undirected edge between x and y;
@@ -31,6 +31,9 @@ def delete(x, y, H, C):
     H: the neighbors of y that are adjacent to x
     C: numpy.array
         CPDAG
+    legacy: bool
+        if True, use gCastle's original third step, which orients h -> y
+        again instead of x -> h
 
     Returns
     -------
@@ -42,12 +45,18 @@ def delete(x, y, H, C):
     C[x, y] = 0
     C[y, x] = 0
 
-    # second operate
-    C[H, y] = 0
+    # second operate: every h in H becomes a child of y
+    if len(H) != 0:
+        C[list(H), y] = 0
 
-    # third operate
+    # third operate: every previously undirected x - h becomes x -> h
     x_neighbor = neighbors(x, C)
-    C[list(H & x_neighbor), y] = 0
+    H_and_neighbor = H & x_neighbor
+    if len(H_and_neighbor) != 0:
+        if legacy:
+            C[list(H_and_neighbor), y] = 0
+        else:
+            C[list(H_and_neighbor), x] = 0
 
     return C
 

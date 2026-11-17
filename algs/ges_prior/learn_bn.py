@@ -4,6 +4,37 @@ This module is the controlled implementation of GES (and its LLM-prior
 extensions) that the rest of the project re-routes constrained GES to.  The
 ``constraint`` argument is duck-typed: it only needs to expose ``allowed`` (an
 ``(n, n)`` boolean matrix) and, optionally, ``to_expert_knowledge()``.
+
+The priors contract
+-------------------
+``estimate_priors`` returns, and ``discover_structure`` accepts, a dict with
+
+    M    (n, n) symmetric,  P(i and j are directly causally related)
+    B    (n, n)             P(i -> j) = M * D
+    D    (n, n)             P(i -> j | related), D[i, j] + D[j, i] = 1
+    has  (n, n) bool        True where the LLM actually answered
+
+``M`` and ``B`` are the published contract (the web service stores exactly
+those two, with 0.5 meaning "no answer"); ``D`` and ``has`` were added in the
+WWW'27 resource revision and are *derived* when a caller hands over the older
+two-matrix form (``_normalise_priors``), so every priors file written before
+the revision still loads and means the same thing.
+
+Which score each algorithm uses (``scores/prior_score.py`` has the formulas):
+
+    algorithm        Phase I            Phase II
+    GES              GES, BIC           CPDAG (oriented at the publication boundary)
+    GES-M            GES, BIC+M         CPDAG
+    GES-B            GES, BIC+B         CPDAG
+    GES-M-B          GES, BIC+M         orient by B inside the equivalence class
+    GES-M-B-HL       GES, BIC+M         hill climbing, BIC+M+B, from an extension
+    GES-M-B-Greedy   GES, BIC+M         per-edge orientation by B
+    GES-HL           -                  hill climbing, BIC
+    GES-M-HL         -                  hill climbing, BIC+M
+    GES-B-HL         -                  hill climbing, BIC+B
+
+"GES-Prior" in the runners and the UI is GES-M-B-HL. Hill climbing breaks score
+ties in set-iteration order, so set ``PYTHONHASHSEED`` for bit-identical reruns.
 """
 
 import os
@@ -18,7 +49,8 @@ from pgmpy.models import DiscreteBayesianNetwork
 from pgmpy.estimators import MaximumLikelihoodEstimator
 
 from .llm_prior import causal_discovery_prompt, extract_probabilities
-from .scores.structure_score_prior import StructureScoreWithPrior
+from .entity_check import entity_level_prune
+from .scores.prior_score import PriorScore, prior_weights
 from .ges_prior import run_ges_prior, run_ges_hl
 from .llm_call import LLMClient
 
@@ -135,19 +167,53 @@ def _estimate_priors(
     if np.all(np.isnan(A)):
         return None
 
+    # A pair has a prior when the LLM gave both the association and the causal
+    # probability. A missing direction alone is not "no prior": the adjacency
+    # is still informed, and D = 0.5 says exactly "cannot orient".
     M = A * C
-    nan_mask_A = np.isnan(A) | np.isnan(A.T)
-    nan_mask_C = np.isnan(C) | np.isnan(C.T)
-    nan_mask_M = nan_mask_A | nan_mask_C
-    M[nan_mask_M] = 0.5
-    M = (M + M.T) / 2
+    has = np.isfinite(M) & np.isfinite(M.T)
+    np.fill_diagonal(has, False)
+    D = np.where(np.isfinite(D), D, 0.5)
 
-    B = M * D
-    nan_mask_D = np.isnan(D)
-    B[nan_mask_D] = M[nan_mask_D]
-    B[nan_mask_M] = 0.5
+    M = np.where(has, (M + M.T) / 2, 0.5)
+    B = np.where(has, M * D, 0.5)
+    D = np.where(has, D, 0.5)
 
-    return {"M": M, "B": B}
+    return {"M": M, "B": B, "D": D, "has": has}
+
+
+def _normalise_priors(priors: dict, n: int) -> dict:
+    """Return ``{"M", "B", "D", "has"}`` from either priors form (see module docstring).
+
+    The two-matrix form marks an unanswered pair by ``M = B = 0.5`` in both
+    directions. An answered pair can never look like that: its two B entries
+    sum to M, so they cannot both equal M = 0.5. The direction is recovered as
+    ``B[i, j] / (B[i, j] + B[j, i])``, which also reads the old "direction
+    unknown" encoding (``B = M`` both ways) as the 0.5 it meant.
+    """
+    M = np.asarray(priors["M"], dtype=float)
+    B = np.asarray(priors["B"], dtype=float)
+    if M.shape != (n, n) or B.shape != (n, n):
+        raise ValueError(f"priors must be ({n}, {n}) matrices, got M {M.shape} and B {B.shape}")
+    M = np.nan_to_num(M, nan=0.5)
+    B = np.nan_to_num(B, nan=0.5)
+
+    if priors.get("has") is not None:
+        has = np.asarray(priors["has"], dtype=bool)
+    else:
+        neutral = np.isclose(M, 0.5) & np.isclose(B, 0.5) & np.isclose(B.T, 0.5)
+        has = ~neutral
+    has = has & has.T
+    np.fill_diagonal(has, False)
+
+    if priors.get("D") is not None:
+        D = np.nan_to_num(np.asarray(priors["D"], dtype=float), nan=0.5)
+    else:
+        total = B + B.T
+        with np.errstate(divide="ignore", invalid="ignore"):
+            D = np.where(total > 0, B / total, 0.5)
+    D = np.where(has, D, 0.5)
+    return {"M": M, "B": np.where(has, M * D, 0.5), "D": D, "has": has}
 
 
 def _adj_to_edges(adj: np.ndarray, columns: list) -> list:
@@ -164,16 +230,18 @@ def _adj_to_edges(adj: np.ndarray, columns: list) -> list:
     return edges
 
 
-_ALGORITHM_ORIENT_MAP = {
-    "GES": 0,
-    "GES-M": 0,
-    "GES-B": 0,
-    "GES-M-B": 1,
-    "GES-M-B-HL": 2,
-    "GES-M-B-Greedy": 3,
+# algorithm -> (Phase I score, orient strategy, Phase II score)
+_ALGORITHMS = {
+    "GES":            ("BIC",   0, "BIC"),
+    "GES-M":          ("BIC+M", 0, "BIC+M"),
+    "GES-B":          ("BIC+B", 0, "BIC+B"),
+    "GES-M-B":        ("BIC+M", 1, "BIC+M+B"),
+    "GES-M-B-HL":     ("BIC+M", 2, "BIC+M+B"),
+    "GES-M-B-Greedy": ("BIC+M", 3, "BIC+M+B"),
 }
 
-_ALGORITHM_HL = {"GES-HL", "GES-M-HL", "GES-B-HL"}
+# algorithm -> the score hill climbing runs under, from the empty graph
+_ALGORITHMS_HL = {"GES-HL": "BIC", "GES-M-HL": "BIC+M", "GES-B-HL": "BIC+B"}
 
 
 def estimate_priors(
@@ -221,6 +289,10 @@ def _save_priors(priors, columns, path):
             [None if np.isnan(x) else x for x in row] for row in priors["B"].tolist()
         ],
     }
+    if priors.get("D") is not None:
+        data["D"] = np.asarray(priors["D"], dtype=float).tolist()
+    if priors.get("has") is not None:
+        data["has"] = np.asarray(priors["has"], dtype=bool).tolist()
     with open(path, "w") as f:
         json.dump(data, f)
 
@@ -230,9 +302,12 @@ def _load_priors(path, columns):
 
     with open(path, "r") as f:
         data = json.load(f)
-    M = np.array(data["M"], dtype=float)
-    B = np.array(data["B"], dtype=float)
-    return {"M": M, "B": B}
+    out = {"M": np.array(data["M"], dtype=float), "B": np.array(data["B"], dtype=float)}
+    if data.get("D") is not None:
+        out["D"] = np.array(data["D"], dtype=float)
+    if data.get("has") is not None:
+        out["has"] = np.array(data["has"], dtype=bool)
+    return out
 
 
 def discover_structure(
@@ -248,22 +323,53 @@ def discover_structure(
     lambda_prior: float = 1.0,
     base_score: str = "bic-d",
     constraint=None,
+    prior_eps: float = 1e-3,
+    legacy_ges: bool = False,
+    entity_ids: Optional[pd.DataFrame] = None,
+    owner_of: Optional[dict] = None,
+    hc_start: str = "prior",
 ) -> np.ndarray:
     """Discover a structure and return its adjacency matrix.
 
     ``constraint`` is duck-typed (needs ``allowed``, optionally
     ``to_expert_knowledge()``).  When priors are needed and no ``llm_client`` is
     given, an :class:`LLMClient` is built with ``llm_model``.
+
+    ``prior_eps`` clips the prior probabilities, bounding what one edge can gain
+    or lose from the prior at ``lambda_prior * log((1 - eps) / eps)``.
+    ``legacy_ges`` reproduces the search as it was before the backward phase
+    and the CPDAG conversion were fixed; it exists for the correctness
+    experiment and nothing else should pass it.
+
+    ``entity_ids`` + ``owner_of`` add the entity-level check after the search
+    (:func:`entity_level_prune`): an edge whose family can be read off one row
+    per owning entity is kept only if those entities support it, not merely the
+    repeated rows of the join (``entity_ids`` is ``Materialization.entity_ids``,
+    ``owner_of`` maps each column to the class variable that holds it). Off
+    unless both are given.
+
+    ``hc_start`` is where GES-M-B-HL's hill climbing starts: ``"prior"`` (the
+    member of the equivalence class the direction prior prefers) or
+    ``"extension"`` (an arbitrary consistent extension).
     """
     columns = df.columns.tolist()
     data = df.astype(str)
 
     allowed = getattr(constraint, "allowed", None) if constraint is not None else None
-    expert_knowledge = (
-        constraint.to_expert_knowledge()
-        if (constraint is not None and hasattr(constraint, "to_expert_knowledge"))
-        else None
-    )
+    if constraint is not None and hasattr(constraint, "to_expert_knowledge"):
+        expert_knowledge = constraint.to_expert_knowledge()
+    elif allowed is not None:
+        # A constraint that only exposes ``allowed`` must still bind hill
+        # climbing, or Phase II could flip an edge back the forbidden way.
+        from pgmpy.causal_discovery import ExpertKnowledge
+
+        n = len(columns)
+        expert_knowledge = ExpertKnowledge(search_space=[
+            (columns[i], columns[j])
+            for i in range(n) for j in range(n) if i != j and allowed[i, j]
+        ])
+    else:
+        expert_knowledge = None
 
     if priors is None and (var_meta is not None or pair_meta is not None):
         if llm_client is None:
@@ -273,39 +379,44 @@ def discover_structure(
             allowed=allowed,
         )
 
-    if algorithm in _ALGORITHM_HL:
-        if priors is not None:
-            score1 = StructureScoreWithPrior(
-                data, base_score, B=priors["M"], lambda_prior=lambda_prior
-            )
-        else:
-            score1 = base_score
-        adj = run_ges_hl(data=data, scoring_method=score1, expert_knowledge=expert_knowledge)
-    elif algorithm in _ALGORITHM_ORIENT_MAP:
-        orient_strategy = _ALGORITHM_ORIENT_MAP[algorithm]
-        if priors is not None:
-            score1 = StructureScoreWithPrior(
-                data, base_score, B=priors["M"], lambda_prior=lambda_prior
-            )
-            score2 = StructureScoreWithPrior(
-                data, base_score, B=priors["B"], lambda_prior=lambda_prior
-            )
-        else:
-            score1 = base_score
-            score2 = base_score
+    pri = _normalise_priors(priors, len(columns)) if priors is not None else None
+
+    def make_score(name: str):
+        # Without priors every algorithm runs under the base score: GES-Prior
+        # with nothing to add *is* GES, which is what the UI promises.
+        if pri is None or name == "BIC" or not lambda_prior:
+            return base_score
+        W = prior_weights(name, pri["M"], pri["D"], pri["has"], eps=prior_eps)
+        return PriorScore(data, base_score=base_score, W=W, lam=lambda_prior)
+
+    if algorithm in _ALGORITHMS_HL:
+        adj = run_ges_hl(
+            data=data,
+            scoring_method=make_score(_ALGORITHMS_HL[algorithm]),
+            expert_knowledge=expert_knowledge,
+        )
+    elif algorithm in _ALGORITHMS:
+        phase1, orient_strategy, phase2 = _ALGORITHMS[algorithm]
         adj = run_ges_prior(
             data=data,
-            scoring_method_i=score1,
-            scoring_method_ii=score2,
+            scoring_method_i=make_score(phase1),
+            scoring_method_ii=make_score(phase2),
             orient_strategy=orient_strategy,
             allowed=allowed,
             expert_knowledge=expert_knowledge,
+            B=pri["B"] if pri is not None else None,
+            legacy_ges=legacy_ges,
+            hc_start=hc_start,
         )
     else:
         raise ValueError(
             f"Unknown algorithm '{algorithm}'. Choose from: "
-            f"{list(_ALGORITHM_ORIENT_MAP.keys()) + list(_ALGORITHM_HL)}"
+            f"{list(_ALGORITHMS) + list(_ALGORITHMS_HL)}"
         )
+
+    if entity_ids is not None and owner_of is not None:
+        adj = entity_level_prune(np.asarray(adj, dtype=int), data, owner_of, entity_ids,
+                                 base_score=base_score)
 
     return adj
 
